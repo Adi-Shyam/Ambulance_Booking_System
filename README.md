@@ -27,7 +27,7 @@ fleet.
 | `mobile/customer-app/` | Patient app — book, track, pay, rate | Expo (Android / iOS) |
 | `mobile/driver-app/` | Driver & organisation console — offers, trips, earnings | Expo (Android / iOS) |
 | `admin-web/` | Control-room dashboard — verification, monitoring, analytics | Browser |
-| `docs/` | Requirement traceability and API reference | — |
+| `docs/` | Requirement traceability, API reference, test plan, and the source SRS | — |
 
 ## Quick start
 
@@ -145,6 +145,21 @@ their offline paths.
 Run one level at a time with `npm run test:unit`, `test:integration` or `test:system`;
 `npm run test:report` regenerates [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md) from an
 actual run.
+
+### Checking a running system
+
+`npm test` is self-contained and never touches your database. To check a system that
+is actually up — after `npm start`, or against a deployment — run:
+
+```bash
+cd backend && npm run smoke
+```
+
+It signs in as the seeded driver, patient and administrator and walks one request
+end to end: on duty → book → offer → accept → the four milestones → invoice →
+payment → rating, asserting the role gate, the privacy rule and the milestone
+ordering along the way. It puts the driver back off duty when it finishes, but it
+does leave its booking behind — run it against a demo database, not a real one.
 
 Several are regression tests pinning defects found after the first build: the fare
 being computed from the wrong distance field, the billed distance being taken from
