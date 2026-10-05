@@ -1,0 +1,11 @@
+# Normalise line endings so the three of us can work on different machines
+# without every file showing up as fully rewritten in a diff.
+* text=auto eol=lf
+
+# Binary assets git must not try to normalise.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.pdf  binary
+*.db   binary
