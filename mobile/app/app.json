@@ -20,7 +20,9 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "INTERNET",
-        "WAKE_LOCK"
+        "WAKE_LOCK",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "usesCleartextTraffic": true,
       "edgeToEdgeEnabled": true
@@ -35,6 +37,12 @@
           "locationAlwaysAndWhenInUsePermission": "Your position is shared with the control room and the patient while you are on duty."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1c3c42ef-1181-415a-82f3-d338b070c41f"
+      }
+    },
+    "owner": "shyamuraicoder"
   }
 }
