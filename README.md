@@ -264,6 +264,44 @@ Data stores D1–D5 map onto the tables documented at the top of
 `backend/src/db/schema.sql`. Constraint C.5 (audit) is the `audit_log` table, written
 by `audit()` on every booking, dispatch decision, status change and admin action.
 
+## Building the Android app
+
+`mobile/app/` is one Expo project serving all three roles, so one APK covers
+patients, drivers and the control room — the mode is chosen at sign-in.
+
+```bash
+cd mobile/app
+npx eas-cli login          # a free Expo account; first time only
+npx eas-cli build --platform android --profile apk-lan
+```
+
+EAS builds in the cloud and returns a download link. Install it on the phone the
+way you would any APK — allow installation from unknown sources, tap the file.
+No Google Play account is involved.
+
+**The one thing that must be right is the backend URL.** In Expo Go the app reads
+the LAN address from the dev server, but a packaged APK has no dev server to ask,
+so the address has to be baked in at build time. That is what the two profiles in
+[`eas.json`](mobile/app/eas.json) are for:
+
+| Profile | `EXPO_PUBLIC_API_URL` points at | Use when |
+|---|---|---|
+| `apk-lan` | your laptop on the local network | demoing with the backend on your machine |
+| `apk-hosted` | a deployed backend over HTTPS | anything you want to survive a network change |
+
+`apk-lan` has a specific IP written into it, and **that IP changes whenever the
+laptop joins a different network** — at which point the installed APK can no
+longer reach anything and has to be rebuilt. Check with `ipconfig`, update
+`eas.json`, rebuild. For a demo you cannot afford to re-flash on the day, deploy
+the backend and use `apk-hosted` instead.
+
+Android blocks plain HTTP by default, so `usesCleartextTraffic` is set in
+`app.json` for the `apk-lan` case. A hosted HTTPS backend does not need it.
+
+iOS is out of scope: Apple requires a paid Developer Program membership to
+install an app on a device at all, and the build itself needs macOS. The same
+code runs on an iPhone through Expo Go if you ever want to show it.
+
 ## Notes on scope
 
 - The mobile apps use Leaflet in a WebView for maps rather than `react-native-maps`,

@@ -8,16 +8,6 @@
     "userInterfaceStyle": "dark",
     "scheme": "ambulancebooking",
     "backgroundColor": "#0f1520",
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "in.ac.nitk.it303.ambulance",
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Your position is used to find the nearest ambulance, and while on duty so requests can be matched and tracked.",
-        "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true
-        }
-      }
-    },
     "android": {
       "package": "in.ac.nitk.it303.ambulance",
       "adaptiveIcon": {
