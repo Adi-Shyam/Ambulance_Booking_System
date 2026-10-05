@@ -184,9 +184,10 @@ router.post('/login', loginLimiter, asyncRoute(async (req, res) => {
   }
   // F.2: the selected mode must match the role granted to the account.
   if (expectedRole && expectedRole !== user.role_code) {
-    const readable = { USER: 'patient', DRIVER: 'driver', ORG: 'organisation', ADMIN: 'administrator' };
+    // The article travels with the noun: "an organisation", not "a organisation".
+    const readable = { USER: 'a patient', DRIVER: 'a driver', ORG: 'an organisation', ADMIN: 'an administrator' };
     return res.status(403).json({
-      error: `This account is registered as a ${readable[user.role_code]}. Choose that mode to sign in.`,
+      error: `This account is registered as ${readable[user.role_code]}. Choose that mode to sign in.`,
       role_code: user.role_code,
     });
   }

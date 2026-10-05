@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Ambulance Booking",
+    "slug": "abs-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "ambulancebooking",
+    "backgroundColor": "#0f1520",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "in.ac.nitk.it303.ambulance",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Your position is used to find the nearest ambulance, and while on duty so requests can be matched and tracked.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "in.ac.nitk.it303.ambulance",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "INTERNET",
+        "WAKE_LOCK"
+      ],
+      "usesCleartextTraffic": true,
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Your position is shared with the control room and the patient while you are on duty."
+        }
+      ]
+    ]
+  }
+}
