@@ -24,14 +24,18 @@ fleet.
 | Folder | What it is | Runs on |
 |---|---|---|
 | `backend/` | REST API, Socket.IO channel, dispatch engine, database | Node ≥ 22.5 |
-| `mobile/customer-app/` | Patient app — book, track, pay, rate | Expo (Android / iOS) |
-| `mobile/driver-app/` | Driver & organisation console — offers, trips, earnings | Expo (Android / iOS) |
-| `admin-web/` | Control-room dashboard — verification, monitoring, analytics | Browser |
+| `mobile/app/` | The app — patient, driver and control room in one | Expo (Android, and web) |
 | `docs/` | Requirement traceability, API reference, test plan, and the source SRS | — |
+
+All three roles are one application. Sign-in opens on a mode chooser — **Book an
+ambulance**, **Drive an ambulance**, **Control room** — and the chosen mode is
+checked against the account the credentials belong to, which is requirement F.2.
+One codebase, one APK, and because Expo also builds for web, the same code
+serves the control room on a laptop.
 
 ## Quick start
 
-Four terminals. Start the backend first — everything else talks to it.
+Two terminals. Start the backend first — the app talks to it.
 
 **1. Backend**
 
@@ -41,69 +45,80 @@ cd backend && npm install && cp .env.example .env && npm run seed && npm start
 
 Serves `http://localhost:4000`. `npm run seed` creates the demo accounts listed below.
 
-**2. Control-room dashboard**
+**2. The app**
 
 ```bash
-cd admin-web && npm install && npm run dev
+cd mobile/app && npm install && npx expo start
 ```
 
-Opens `http://localhost:5173`. Sign in with the administrator account.
-
-**3. Patient app**
-
-```bash
-cd mobile/customer-app && npm install && npx expo start
-```
-
-Scan the QR code with Expo Go, or press `a` for an Android emulator.
-
-**4. Driver app**
-
-```bash
-cd mobile/driver-app && npm install && npx expo start
-```
+Scan the QR code with Expo Go, press `a` for an Android emulator, or `w` to open
+it in a browser — that last one is how you run the control room on a big screen.
 
 ### Demo accounts
 
-| Role | Mobile | Password | Use in |
+Each signs in under the mode named beside it.
+
+| Role | Mobile | Password | Mode |
 |---|---|---|---|
-| Administrator | `9000000001` | `admin123` | Dashboard |
-| Patient | `9800000001` | `user123` | Patient app |
-| Patient | `9800000002` | `user123` | Patient app |
-| Driver — ALS | `9700000002` | `driver123` | Driver app |
-| Driver — ICU | `9700000003` | `driver123` | Driver app |
-| Driver — PTV | `9700000004` | `driver123` | Driver app |
+| Administrator | `9000000001` | `admin123` | Control room |
+| Patient | `9800000001` | `user123` | Book an ambulance |
+| Patient | `9800000002` | `user123` | Book an ambulance |
+| Driver — ALS | `9700000002` | `driver123` | Drive an ambulance |
+| Driver — ICU | `9700000003` | `driver123` | Drive an ambulance |
+| Driver — PTV | `9700000004` | `driver123` | Drive an ambulance |
 | Driver — unverified | `9700000006` | `driver123` | Shows the verification gate |
+
+Choosing the wrong mode is refused with the role the account actually holds,
+rather than signing you into a console you cannot use.
 
 ### Connecting a real phone
 
-A phone cannot reach `localhost` — that is the phone itself. The apps read the LAN
-address Expo already knows and point at port 4000 automatically, so on the same Wi-Fi
-this usually just works. If it does not, create `.env` in the app folder:
+A phone cannot reach `localhost` — that is the phone itself. Under Expo Go the
+app reads the LAN address Expo already knows and points at port 4000
+automatically, so on the same Wi-Fi this usually just works.
+
+When it does not — a packaged APK, or a network Expo cannot infer — the sign-in
+screen reports the address it is using and lets you change it:
 
 ```
-EXPO_PUBLIC_API_URL=http://192.168.1.20:4000
+Backend: http://192.168.1.20:4000              Change
 ```
 
-with your machine's LAN IP, and restart Expo.
+The value is stored on the device, so this is a one-time twenty seconds per
+network rather than a rebuild. See
+[Pointing the app at your backend](#pointing-the-app-at-your-backend).
+
+> **Two devices for a full demonstration.** One app means one signed-in session
+> per device, so showing a booking reach a driver needs two surfaces — a phone
+> as the driver and the browser build as the patient, or two phones.
 
 ## A five-minute demonstration
 
-1. **Dashboard** → *Providers*: the ALS driver is `VERIFIED`, Priya Rao is `PENDING`.
-   Verify her and watch the driver app update instantly.
-2. **Driver app**: sign in as `9700000002`, toggle **On duty**. The dashboard's
+Run the app twice — a phone in **Drive an ambulance** and a browser in **Book an
+ambulance** — with a third window in **Control room** if you have the screen.
+
+1. **Control room** → *Providers*: the ALS driver is `VERIFIED`, Priya Rao is
+   `PENDING`. Verify her and watch the driver's console unlock instantly, with
+   no reload.
+2. **Driver**: sign in as `9700000002`, toggle **On duty**. The control room's
    *Fleet map* shows the vehicle turn green and start reporting position.
-3. **Patient app**: sign in as `9800000001`, pick **ALS**, confirm the pin, send the
+3. **Patient**: sign in as `9800000001`, pick **ALS**, confirm the pin, send the
    request.
-4. **Driver app**: the offer appears with a 45-second countdown; the backend console
+4. **Driver**: the offer appears with a 45-second countdown; the backend console
    prints the WhatsApp alert that would have been sent. Accept it.
-5. **Patient app**: the ambulance appears on the map with a live ETA that updates as
+5. **Patient**: the ambulance appears on the map with a live ETA that updates as
    the driver's position changes.
-6. **Driver app**: step through *On the way* → *Arrived* → *On board* → *Complete*.
-   Each tap lands in the patient's app and on the dashboard immediately.
-7. **Patient app**: pay the invoice and leave a rating.
-8. **Dashboard** → *Reports*: response time, demand, revenue and provider performance
-   now include this trip. *Audit trail* shows every step that was taken.
+6. **Driver**: step through *On the way* → *Arrived* → *On board* → *Complete*.
+   Each tap lands in the patient's app and the control room immediately.
+7. **Patient**: pay the invoice and leave a rating.
+8. **Control room** → *More* → *Reports*: response time, demand, revenue and
+   provider performance now include this trip. *Audit trail* shows every step
+   that was taken.
+
+On a real phone the odometer accumulates between *On board* and *Complete*, so
+the invoice carries a genuine distance charge. In a browser, where geolocation
+is usually denied, the driver never moves and the billed distance is correctly
+zero — the fare falls back to base plus surcharge plus tax.
 
 To see automatic reassignment (F.7): put two drivers on duty, book, and **decline**
 the first offer — the request moves to the next-best ambulance on its own. Ignoring

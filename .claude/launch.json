@@ -12,42 +12,6 @@
       "port": 4000
     },
     {
-      "name": "admin-web",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        "admin-web",
-        "run",
-        "dev"
-      ],
-      "port": 5173
-    },
-    {
-      "name": "customer-app",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        "mobile/customer-app",
-        "run",
-        "web"
-      ],
-      "port": 8081
-    },
-    {
-      "name": "driver-app",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        "mobile/driver-app",
-        "run",
-        "web",
-        "--",
-        "--port",
-        "8082"
-      ],
-      "port": 8082
-    },
-    {
       "name": "app",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
