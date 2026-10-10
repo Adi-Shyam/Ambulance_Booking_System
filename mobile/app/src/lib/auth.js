@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { api, clearToken, loadToken, saveToken, setUnauthorizedHandler } from './api';
+import { api, clearToken, loadBaseUrl, loadToken, saveToken, setUnauthorizedHandler } from './api';
 import { connectSocket, disconnectSocket } from './socket';
 import { modeForRoleCode, roleFor } from './config';
 
@@ -27,6 +27,10 @@ export function AuthProvider({ children }) {
     });
 
     (async () => {
+      // The stored backend address has to be in place before the first
+      // request, otherwise boot would talk to the compiled-in default.
+      await loadBaseUrl();
+
       const token = await loadToken();
       if (!token) {
         setBooting(false);

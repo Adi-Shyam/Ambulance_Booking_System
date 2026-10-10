@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { io } from 'socket.io-client';
-import { API_URL } from './config';
-import { getToken } from './api';
+// The address is read at connect time, not at import: it is a setting the
+// person can change, so a socket opened later must use the current value.
+import { getBaseUrl, getToken } from './api';
 
 let socket = null;
 
@@ -13,7 +14,7 @@ export function connectSocket() {
   if (socket?.connected) return socket;
 
   socket?.disconnect();
-  socket = io(API_URL, {
+  socket = io(getBaseUrl(), {
     auth: { token },
     transports: ['websocket', 'polling'],
     reconnection: true,

@@ -2,15 +2,17 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
 /**
- * Where the backend lives.
+ * The backend address to fall back on when nobody has chosen one.
  *
  * A phone running Expo Go cannot reach "localhost" - that points at the phone
  * itself. Expo already knows the LAN address of the machine running the dev
  * server, so we reuse its host and swap in the API port.
  *
- * EXPO_PUBLIC_API_URL overrides it, and a standalone build *must* set it: there
- * is no dev server in a packaged APK, so `hostUri` is null and the fallbacks
- * below are only meaningful on an emulator.
+ * In a packaged APK there is no dev server to ask, so this resolves to whatever
+ * EXPO_PUBLIC_API_URL was set to at build time - an address that is correct
+ * only until the laptop changes network. That is why `api.js` layers a stored,
+ * user-editable override on top of this: the app should not need rebuilding
+ * every time the Wi-Fi changes.
  */
 function resolveApiUrl() {
   const explicit = process.env.EXPO_PUBLIC_API_URL;
@@ -33,7 +35,8 @@ function resolveApiUrl() {
   return `http://localhost:${API_PORT}`;
 }
 
-export const API_URL = resolveApiUrl();
+/** The built-in default. The address actually used is `api.url`. */
+export const DEFAULT_API_URL = resolveApiUrl();
 
 /**
  * F.2 - the modes offered at sign-in.

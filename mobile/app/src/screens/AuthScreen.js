@@ -4,6 +4,7 @@ import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
 import { ROLES, roleFor } from '../lib/config';
 import { Banner, Body, Button, Card, Field, H1, H2, Small } from '../components/ui';
+import BackendSetting from '../components/BackendSetting';
 import { colors, radius, spacing, typo } from '../lib/theme';
 
 /**
@@ -35,6 +36,9 @@ export default function AuthScreen() {
   const [otp, setOtp] = useState({ sent: false, code: '', devCode: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // `api.url` is a getter on a module, so changing it does not re-render on its
+  // own. Bumping this is what redraws the screens that display the address.
+  const [, setBackendNonce] = useState(0);
 
   const role = roleFor(roleKey);
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
@@ -86,7 +90,9 @@ export default function AuthScreen() {
           </Pressable>
         ))}
 
-        <Small style={{ textAlign: 'center', marginTop: spacing.lg }}>Backend: {api.url}</Small>
+        <View style={{ marginTop: spacing.lg }}>
+          <BackendSetting onChange={() => setBackendNonce((n) => n + 1)} />
+        </View>
         <Body style={[typo.tiny, styles.emergency]}>
           In a life-threatening emergency also call 108 directly.
         </Body>
@@ -256,7 +262,7 @@ export default function AuthScreen() {
         ) : null}
 
         <Small style={{ textAlign: 'center', marginTop: spacing.md }}>Demo account {role.demo}</Small>
-        <Small style={{ textAlign: 'center', marginTop: 2 }}>Backend: {api.url}</Small>
+        <BackendSetting onChange={() => setBackendNonce((n) => n + 1)} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
