@@ -310,5 +310,3 @@ code runs on an iPhone through Expo Go if you ever want to show it.
   a development build and the `expo-location` background permission.
 - Push notifications go over the Socket.IO channel. Adding Expo push tokens would
   extend this to notifications when the app is closed.
-#   A m b u l a n c e _ B o o k i n g _ S y s t e m  
- 
