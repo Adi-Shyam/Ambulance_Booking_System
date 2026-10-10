@@ -2,19 +2,19 @@
 
 Ambulance Booking System — Team 16, IT303.
 
-Generated from an actual run by `npm run test:report` on 2026-09-07T07:12:55.634Z.
+Generated from an actual run by `npm run test:report` on 2026-10-10T20:06:41.186Z.
 Do not edit by hand; re-run the command instead.
 
 ## Summary
 
 | Level | Purpose | Tests | Passed | Failed |
 |---|---|---|---|---|
-| Unit | One module in isolation | 57 | 57 | 0 |
+| Unit | One module in isolation | 76 | 76 | 0 |
 | Integration | Modules working together over HTTP and the database | 50 | 50 | 0 |
 | System | Whole-system behaviour and failure recovery | 11 | 11 | 0 |
-| **Total** | | **118** | **118** | **0** |
+| **Total** | | **137** | **137** | **0** |
 
-All 118 tests passed.
+All 137 tests passed.
 
 ## Unit tests
 
@@ -28,11 +28,15 @@ All 118 tests passed.
 | 6 | timezone offset parsing | Pass |
 | 7 | SQL bucket expressions | Pass |
 | 8 | calendar arithmetic | Pass |
-| 9 | counting every attempt | Pass |
-| 10 | counters are scoped, not global | Pass |
-| 11 | failure-only counting | Pass |
-| 12 | the window expires | Pass |
-| 13 | data dictionary validation | Pass |
+| 9 | templates carry both a readable body and template parameters | Pass |
+| 10 | E.164 formatting for the Cloud API | Pass |
+| 11 | payment signatures (Razorpay checkout callback) | Pass |
+| 12 | webhook signatures (Razorpay webhook) | Pass |
+| 13 | counting every attempt | Pass |
+| 14 | counters are scoped, not global | Pass |
+| 15 | failure-only counting | Pass |
+| 16 | the window expires | Pass |
+| 17 | data dictionary validation | Pass |
 
 ## Integration tests
 

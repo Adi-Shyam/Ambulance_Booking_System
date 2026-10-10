@@ -20,6 +20,8 @@ conventional status code: 400 validation, 401 authentication, 403 role or owners
 | GET | `/api/auth/me` | Current user, provider profile and organisation. |
 | PATCH | `/api/auth/me` | `full_name`, `email_id`. |
 | POST | `/api/auth/password` | `current_password`, `new_password`. |
+| POST | `/api/auth/logout` | Revokes *this* session in D1 by its `jti`, so the token stops being accepted immediately rather than at its 24-hour expiry. Clearing it on the device alone would not. |
+| GET | `/api/auth/sessions` | The account's own last 25 sessions — issued, expiry, revoked — with `current: true` on the one making the request. This is what DFD 0.1.3 writes. |
 
 Session response:
 
@@ -79,7 +81,7 @@ All of these need the `DRIVER` or `ORG` role; the ones marked † additionally n
 | GET | `/api/payments/invoices` | The patient's invoices. |
 | GET | `/api/payments/invoices/:id` | Patient, assigned driver or admin only. |
 | POST | `/api/payments/invoices/:id/pay` | `payment_mode` `UPI`\|`CARD`\|`NETBANKING`\|`CASH`. |
-| POST | `/api/payments/webhook` | *public,* signature-verified. Confirms a pending gateway charge. |
+| POST | `/api/payments/webhook` | *public,* signature-verified — the signature is the credential, not a session. Confirms a pending gateway charge. With an `X-Razorpay-Signature` header it verifies the HMAC of the **raw body** against `RAZORPAY_WEBHOOK_SECRET` and reads `payload.payment.entity`; without one it accepts the Checkout callback shape (`order_id`, `payment_id`, `signature`) verified against the API key secret. The two secrets are not interchangeable. |
 
 ---
 

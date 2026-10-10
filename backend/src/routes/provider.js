@@ -398,7 +398,7 @@ router.post('/trips/:tripId/status', requireProvider, asyncRoute(async (req, res
   };
   notifications.notify(booking.user_id, {
     title: milestoneTitles[trip_milestone] || `Trip ${trip_milestone}`,
-    body: messaging.templates.statusUpdate({ booking, milestone: trip_milestone, etaMinutes: trip.eta_minutes }),
+    body: messaging.templates.statusUpdate({ booking, milestone: trip_milestone, etaMinutes: trip.eta_minutes }).body,
     eventType: trip_milestone,
     bookingId: trip.booking_id,
   });
@@ -409,7 +409,7 @@ router.post('/trips/:tripId/status', requireProvider, asyncRoute(async (req, res
       phoneNo: patient.phone_no,
       bookingId: trip.booking_id,
       templateId: config.whatsapp.templates.status,
-      body: messaging.templates.statusUpdate({ booking, milestone: trip_milestone, etaMinutes: trip.eta_minutes }),
+      ...messaging.templates.statusUpdate({ booking, milestone: trip_milestone, etaMinutes: trip.eta_minutes }),
     })
     .catch(() => {});
 

@@ -146,13 +146,13 @@ Timers are re-armed on restart, so a server bounce mid-offer does not strand a r
 cd backend && npm test
 ```
 
-118 tests, no external services required — the suite boots the API on an ephemeral
+137 tests, no external services required — the suite boots the API on an ephemeral
 port against a throwaway database, and the WhatsApp and maps adapters fall back to
 their offline paths.
 
 | Level | Suite | Covers |
 |---|---|---|
-| Unit (57) | `tests/unit/*.test.js` | Fare arithmetic, geodesy, polyline decoding, identifier formats, timezone bucketing, rate-limit windows, data-dictionary validators |
+| Unit (76) | `tests/unit/*.test.js` | Fare arithmetic, geodesy, polyline decoding, identifier formats, timezone bucketing, rate-limit windows, data-dictionary validators, gateway signature verification, WhatsApp template parameters |
 | Integration (50) | `tests/integration/api.test.js` | Auth and RBAC, the full booking → dispatch → trip → invoice → rating lifecycle, automatic reassignment, privacy, rate limiting, admin reports and the audit trail |
 | | `tests/integration/session.test.js` | Session records in D1, listing and ending your own sessions |
 | System (11) | `tests/system/recovery.test.js` | Recovery sweep, availability consistency, reporting calendar, batch list queries |
@@ -238,6 +238,22 @@ messages are stored in the `messages` table and printed to the console, so the w
 flow is demonstrable without a Meta business account. Set `WHATSAPP_TOKEN` and
 `WHATSAPP_PHONE_NUMBER_ID` and the same code path sends through the WhatsApp Business
 Cloud API. Either way the *Alert log* page shows what was sent.
+
+There are two levels of "really sending", because Meta only accepts free-form
+text inside the **24-hour customer service window** — that is, to someone who
+messaged you first:
+
+| | What you need | `WHATSAPP_USE_TEMPLATES` |
+|---|---|---|
+| **Demo** | Meta test number, a token, and up to 5 allow-listed recipients. Message the test number from the phone first to open the window. | `false` |
+| **Production** | Business verification, a dedicated number, and approved templates. | `true` |
+
+A dispatch alert to a driver is business-initiated and almost never inside that
+window, so production must send templates. Each builder in `services/messaging.js`
+returns both forms of its message — the readable `body` and the ordered `params`
+for the template of the same name — so switching is a configuration change, not
+a code change. Template parameters cannot contain newlines, which is why the
+layout belongs in the approved template and each parameter is a flat value.
 
 **Maps** — defaults to OpenStreetMap: Nominatim for geocoding, OSRM for routing, no
 API key required. Set `MAPS_PROVIDER=google` with a `GOOGLE_MAPS_API_KEY` to switch to

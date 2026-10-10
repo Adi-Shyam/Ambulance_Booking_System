@@ -16,20 +16,51 @@ router.get('/fare-rules', (req, res) => {
   res.json({ fare_rules: fare.allRules(), tax_percent: require('../config').taxPercent });
 });
 
-/** Gateway webhook - confirms a PENDING charge out of band. Unauthenticated by
- *  design: the gateway signature is the credential, not a session token. */
+/**
+ * Gateway webhook - confirms a PENDING charge out of band. Unauthenticated by
+ * design: the signature is the credential, not a session token.
+ *
+ * Razorpay signs the raw body with the webhook secret and sends the digest in
+ * X-Razorpay-Signature, wrapping the payment in an event envelope. The older
+ * flat shape is still accepted so the mock transport and the existing tests can
+ * drive this route without a real gateway.
+ */
 router.post('/webhook', asyncRoute(async (req, res) => {
-  const { order_id: orderId, payment_id: paymentId, signature } = req.body || {};
-  if (!payments.verifySignature({ orderId, paymentId, signature })) {
-    return res.status(400).json({ error: 'Invalid signature' });
+  const headerSignature = req.get('x-razorpay-signature');
+  const body = req.body || {};
+
+  let orderId;
+  let paymentId;
+  let verified = false;
+
+  if (headerSignature) {
+    // A genuine webhook: verify the bytes, then read the event envelope.
+    verified = payments.verifyWebhookSignature({ rawBody: req.rawBody, signature: headerSignature });
+    const entity = body?.payload?.payment?.entity || {};
+    orderId = entity.order_id;
+    paymentId = entity.id;
+  } else {
+    // Checkout-callback shape, relayed by a client that has just paid.
+    orderId = body.order_id;
+    paymentId = body.payment_id;
+    verified = payments.verifyPaymentSignature({ orderId, paymentId, signature: body.signature });
   }
+
+  if (!verified) return res.status(400).json({ error: 'Invalid signature' });
+  if (!orderId || !paymentId) return res.status(400).json({ error: 'Missing order or payment reference' });
+
   const ts = nowIso();
-  db.prepare(
+  const result = db.prepare(
     `UPDATE invoices SET payment_status = 'SUCCESS', transaction_ref = ?, payment_timestamp = ?
      WHERE transaction_ref = ?`
   ).run(paymentId, ts, orderId);
-  audit('PAYMENT_WEBHOOK', { entityType: 'invoice', entityId: orderId, details: { paymentId } });
-  res.json({ received: true });
+
+  audit('PAYMENT_WEBHOOK', {
+    entityType: 'invoice',
+    entityId: orderId,
+    details: { paymentId, matched: result.changes, source: headerSignature ? 'webhook' : 'callback' },
+  });
+  res.json({ received: true, matched: result.changes });
 }));
 
 router.use(authenticate);

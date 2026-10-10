@@ -48,14 +48,50 @@ async function charge({ invoice, paymentMode }) {
   return { payment_status: 'SUCCESS', transaction_ref: reference('mock'), gateway: 'mock' };
 }
 
-/** Verifies a Razorpay webhook signature; used by the payment webhook route. */
-function verifySignature({ orderId, paymentId, signature }) {
+/**
+ * Constant-time compare of two hex digests.
+ *
+ * A plain `===` leaks how much of the signature matched through how long the
+ * comparison took, which is enough to forge one a byte at a time.
+ */
+function sameDigest(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
+  } catch {
+    return false; // not valid hex
+  }
+}
+
+/**
+ * Verifies the signature Razorpay Checkout hands back to the *client* after a
+ * payment: HMAC of "order_id|payment_id" keyed with the API key secret.
+ *
+ * This is not the webhook signature. The two look similar and are not
+ * interchangeable - see verifyWebhookSignature.
+ */
+function verifyPaymentSignature({ orderId, paymentId, signature }) {
   if (!config.payment.razorpayKeySecret) return false;
   const expected = crypto
     .createHmac('sha256', config.payment.razorpayKeySecret)
     .update(`${orderId}|${paymentId}`)
     .digest('hex');
-  return expected === signature;
+  return sameDigest(expected, signature);
 }
 
-module.exports = { charge, verifySignature };
+/**
+ * Verifies a Razorpay *webhook*, which signs the raw request body with a
+ * dedicated webhook secret and sends the digest in X-Razorpay-Signature.
+ *
+ * It must be the exact bytes Razorpay sent: re-serialising the parsed JSON
+ * reorders keys and changes whitespace, and the digest no longer matches. That
+ * is why server.js keeps the raw buffer on req.rawBody.
+ */
+function verifyWebhookSignature({ rawBody, signature }) {
+  const secret = config.payment.razorpayWebhookSecret;
+  if (!secret || !rawBody) return false;
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  return sameDigest(expected, signature);
+}
+
+module.exports = { charge, verifyPaymentSignature, verifyWebhookSignature };

@@ -21,7 +21,13 @@ migrate();
 const app = express();
 app.set('trust proxy', 1);
 app.use(cors({ origin: config.corsOrigin === '*' ? true : config.corsOrigin.split(','), credentials: true }));
-app.use(express.json({ limit: '1mb' }));
+// The raw bytes are kept alongside the parsed body because a gateway webhook
+// signs what it actually sent. Re-serialising the parsed JSON reorders keys and
+// normalises whitespace, so the digest would never match.
+app.use(express.json({
+  limit: '1mb',
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 app.use(express.urlencoded({ extended: true }));
 if (config.env !== 'test') app.use(morgan('dev'));
 

@@ -260,7 +260,7 @@ async function offerNext(bookingId) {
       phoneNo: chosen.phone_no,
       bookingId,
       templateId: config.whatsapp.templates.dispatch,
-      body: messaging.templates.dispatchAlert({
+      ...messaging.templates.dispatchAlert({
         booking,
         provider: chosen,
         distanceKm: chosen.distance_km,
@@ -398,7 +398,7 @@ async function acceptOffer(assignmentId, providerId) {
       phoneNo: patient.phone_no,
       bookingId: booking.booking_id,
       templateId: config.whatsapp.templates.status,
-      body: messaging.templates.assignmentConfirmed({
+      ...messaging.templates.assignmentConfirmed({
         booking, provider, driverName: provider.full_name, etaMinutes,
       }),
     })

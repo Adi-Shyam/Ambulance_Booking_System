@@ -46,6 +46,11 @@ const config = {
     token: process.env.WHATSAPP_TOKEN || '',
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
     apiVersion: process.env.WHATSAPP_API_VERSION || 'v20.0',
+    // Business-initiated messages need an approved template; free-form text
+    // only works inside the 24-hour customer service window. A test number
+    // with that window open needs no templates, which is why this is a flag.
+    useTemplates: bool(process.env.WHATSAPP_USE_TEMPLATES, false),
+    templateLanguage: process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en',
     templates: {
       dispatch: process.env.WHATSAPP_TEMPLATE_DISPATCH || 'ambulance_dispatch_alert',
       otp: process.env.WHATSAPP_TEMPLATE_OTP || 'ambulance_otp',
@@ -66,6 +71,8 @@ const config = {
     provider: (process.env.PAYMENT_PROVIDER || 'mock').toLowerCase(),
     razorpayKeyId: process.env.RAZORPAY_KEY_ID || '',
     razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || '',
+    // Separate from the API key secret: Razorpay signs webhooks with this one.
+    razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
   },
 
   taxPercent: int(process.env.TAX_PERCENT, 5),
