@@ -279,21 +279,36 @@ EAS builds in the cloud and returns a download link. Install it on the phone the
 way you would any APK — allow installation from unknown sources, tap the file.
 No Google Play account is involved.
 
-**The one thing that must be right is the backend URL.** In Expo Go the app reads
-the LAN address from the dev server, but a packaged APK has no dev server to ask,
-so the address has to be baked in at build time. That is what the two profiles in
-[`eas.json`](mobile/app/eas.json) are for:
+### Pointing the app at your backend
 
-| Profile | `EXPO_PUBLIC_API_URL` points at | Use when |
+A packaged APK has no dev server to ask for the LAN address, so it starts from
+whatever `EXPO_PUBLIC_API_URL` was set to at build time. That value is only a
+**default**: the address is a stored setting, so one APK works on any network.
+
+On the sign-in screen, the line reporting where requests go is tappable:
+
+```
+Backend: http://192.168.1.20:4000              Change
+```
+
+Tap **Change**, type the new address, save. It is kept on the device and
+survives restarts, and *(changed)* appears next to it while an override is in
+effect. **Back to the built-in address** restores the compiled-in default.
+
+That setting lives on the sign-in screen deliberately — it is the only screen
+reachable when the address is wrong, since nothing else works until a request
+succeeds. A bare `host:port` is enough; `http://` is assumed.
+
+So after moving to a new network you only need `ipconfig` on the laptop and
+twenty seconds on the phone. No rebuild.
+
+The two profiles in [`eas.json`](mobile/app/eas.json) just choose the starting
+default:
+
+| Profile | Default points at | Use when |
 |---|---|---|
 | `apk-lan` | your laptop on the local network | demoing with the backend on your machine |
-| `apk-hosted` | a deployed backend over HTTPS | anything you want to survive a network change |
-
-`apk-lan` has a specific IP written into it, and **that IP changes whenever the
-laptop joins a different network** — at which point the installed APK can no
-longer reach anything and has to be rebuilt. Check with `ipconfig`, update
-`eas.json`, rebuild. For a demo you cannot afford to re-flash on the day, deploy
-the backend and use `apk-hosted` instead.
+| `apk-hosted` | a deployed backend over HTTPS | a backend with a fixed address |
 
 Android blocks plain HTTP by default, so `usesCleartextTraffic` is set in
 `app.json` for the `apk-lan` case. A hosted HTTPS backend does not need it.
