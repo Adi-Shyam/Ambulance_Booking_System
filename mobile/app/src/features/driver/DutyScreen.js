@@ -62,11 +62,16 @@ export default function DutyScreen({ navigation }) {
   const [busy, setBusy] = useState(false);
   const [acting, setActing] = useState(null);      // assignment_id being answered
   const [gpsDenied, setGpsDenied] = useState(false);
+  const [pingError, setPingError] = useState('');
   const [, setTick] = useState(0);                 // drives the countdown re-render
 
   const pingTimer = useRef(null);
   const positionRef = useRef(position);
   positionRef.current = position;
+
+  // Recomputed on every render, which the ticker above guarantees happens
+  // while on duty even when nothing else changes.
+  const pingAgeSeconds = lastPing ? Math.round((Date.now() - new Date(lastPing).getTime()) / 1000) : null;
 
   const verified = provider?.verification_status === 'VERIFIED';
   const onDuty = availability === 'AVAILABLE';
@@ -140,6 +145,21 @@ export default function DutyScreen({ navigation }) {
     return () => clearInterval(t);
   }, [offers.length]);
 
+  /**
+   * Ages the "last reported" line while on duty.
+   *
+   * It is derived at render time, and the only thing that used to re-render
+   * this screen was a successful ping — so when pings started failing the
+   * clock froze on "just now" and went on claiming the ambulance was
+   * reporting. A console that lies in that direction is worse than one that
+   * shows nothing.
+   */
+  useEffect(() => {
+    if (!onDuty && !onTrip) return undefined;
+    const t = setInterval(() => setTick((n) => n + 1), 10_000);
+    return () => clearInterval(t);
+  }, [onDuty, onTrip]);
+
   // -------------------------------------------------- position reporting
   /**
    * Asks for location permission only when it is not already held. The ping
@@ -171,14 +191,23 @@ export default function DutyScreen({ navigation }) {
   const sendPing = useCallback(async (coords) => {
     const body = coords || positionRef.current;
     if (!body) return;
-    const r = await api.post('/api/provider/location', {
-      latitude: body.latitude,
-      longitude: body.longitude,
-      ...(body.speed_kmph !== undefined ? { speed_kmph: body.speed_kmph } : {}),
-    });
-    setPosition({ latitude: body.latitude, longitude: body.longitude });
-    setLastPing(new Date().toISOString());
-    return r;
+    try {
+      const r = await api.post('/api/provider/location', {
+        latitude: body.latitude,
+        longitude: body.longitude,
+        ...(body.speed_kmph !== undefined ? { speed_kmph: body.speed_kmph } : {}),
+      });
+      setPosition({ latitude: body.latitude, longitude: body.longitude });
+      setLastPing(new Date().toISOString());
+      setPingError('');
+      return r;
+    } catch (e) {
+      // A failed ping has to be visible. Dispatch stops considering an
+      // ambulance whose position goes stale, so a driver who believes they are
+      // reporting while nothing is arriving is the worst state to be in.
+      setPingError(e.message);
+      throw e;
+    }
   }, []);
 
   function stopPinging() {
@@ -194,9 +223,13 @@ export default function DutyScreen({ navigation }) {
   const startPinging = useCallback(() => {
     stopPinging();
     pingTimer.current = setInterval(() => {
+      // If the fix cannot be read, still report the last known pin — a stale
+      // position the matcher can see beats none at all. Only a failed *send*
+      // is an error, and sendPing surfaces that itself.
       readPosition()
         .then(sendPing)
-        .catch(() => sendPing().catch(() => {}));   // fall back to the last known pin
+        .catch(() => sendPing())
+        .catch(() => {});
     }, LOCATION_PING_MS);
   }, [readPosition, sendPing]);
 
@@ -358,9 +391,16 @@ export default function DutyScreen({ navigation }) {
           <Row
             label="Position last reported"
             value={lastPing ? relative(lastPing) : 'never'}
-            valueStyle={!lastPing ? { color: colors.warn } : undefined}
+            valueStyle={!lastPing || pingAgeSeconds > 60 ? { color: colors.warn } : undefined}
           />
         </View>
+
+        {pingError ? (
+          <Banner kind="error">
+            Your position is not reaching the control room: {pingError}
+            {pingAgeSeconds != null ? ` Last accepted ${relative(lastPing)}.` : ''}
+          </Banner>
+        ) : null}
       </Card>
 
       {/* ------------------------------------------------ live offers */}
