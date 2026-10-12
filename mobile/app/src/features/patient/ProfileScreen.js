@@ -1,32 +1,20 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { useSocketEvent } from '../../lib/socket';
 import { confirmAction } from '../../lib/confirm';
-import { colors, dateTimeOf, relative, spacing, typo } from '../../lib/theme';
+import { colors, dateTimeOf, spacing } from '../../lib/theme';
 import { Banner, Body, Button, Card, Field, H2, Pill, Row, Small } from '../../components/ui';
 
-// Profile, plus the in-app notification inbox required by F.14.
+// The patient's own account. The notification inbox (F.14) is shared with the
+// driver and control-room screens rather than duplicated here.
 export default function ProfileScreen() {
   const { user, signOut, refresh } = useAuth();
-  const [notifications, setNotifications] = useState([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ full_name: user?.full_name || '', email_id: user?.email_id || '' });
   const [saving, setSaving] = useState(false);
-
-  const load = useCallback(() => {
-    api
-      .get('/api/notifications')
-      .then((r) => setNotifications(r.notifications))
-      .catch((e) => setError(e.message));
-  }, []);
-
-  useFocusEffect(useCallback(() => { load(); }, [load]));
-  useSocketEvent('notification', (n) => setNotifications((prev) => [n, ...prev]), []);
 
   async function save() {
     setSaving(true);
@@ -42,13 +30,6 @@ export default function ProfileScreen() {
       setSaving(false);
     }
   }
-
-  async function markAllRead() {
-    await api.post('/api/notifications/read', {}).catch(() => {});
-    load();
-  }
-
-  const unread = notifications.filter((n) => !n.read_flag).length;
 
   return (
     <ScrollView
@@ -105,29 +86,7 @@ export default function ProfileScreen() {
         )}
       </Card>
 
-      <Card>
-        <View style={styles.headRow}>
-          <H2>Notifications</H2>
-          {unread > 0 ? <Pill label={`${unread} new`} tone={colors.accent} /> : null}
-        </View>
-
-        {notifications.length === 0 ? (
-          <Small style={{ marginTop: spacing.sm }}>No notifications yet.</Small>
-        ) : (
-          <>
-            {notifications.slice(0, 25).map((n) => (
-              <View key={n.id} style={[styles.notif, !n.read_flag && { borderLeftColor: colors.accent }]}>
-                <Body style={{ fontWeight: '600' }}>{n.title}</Body>
-                {n.body ? <Small style={{ marginTop: 2 }}>{n.body}</Small> : null}
-                <Text style={[typo.tiny, { marginTop: 4 }]}>{relative(n.created_at)}</Text>
-              </View>
-            ))}
-            {unread > 0 ? (
-              <Button title="Mark all as read" variant="ghost" onPress={markAllRead} style={{ marginTop: spacing.sm }} />
-            ) : null}
-          </>
-        )}
-      </Card>
+      <NotificationInbox title="Notifications" />
 
       <Card>
         <H2>About</H2>

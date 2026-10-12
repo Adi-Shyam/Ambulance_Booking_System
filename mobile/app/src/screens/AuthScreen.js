@@ -123,7 +123,30 @@ export default function AuthScreen() {
       setOtp({ sent: true, code: '', devCode: r.otp_code || '' });
     });
 
-  const submitOtp = () => run(() => verifyOtp(roleKey, form.phone_no.trim(), otp.code.trim()));
+  /**
+   * A correct code on a number with no account registers it, so the server may
+   * come back asking for a name. Rather than treat that as an error, show the
+   * field and let them finish — the code they just proved is still good.
+   */
+  const submitOtp = () =>
+    run(async () => {
+      try {
+        await verifyOtp(roleKey, form.phone_no.trim(), otp.code.trim(), {
+          full_name: form.full_name.trim() || undefined,
+        });
+      } catch (e) {
+        if (e.payload?.needs_registration) {
+          if (!canRegister) {
+            // F.13: a control-room account is made by another administrator,
+            // never by proving you hold a phone number.
+            throw new Error('No control-room account uses this number. An administrator has to create one for you.');
+          }
+          setOtp((o) => ({ ...o, needsName: true }));
+          throw new Error('This number is new here. Enter your name to create an account.');
+        }
+        throw e;
+      }
+    });
 
   const tabs = [[MODES.SIGN_IN, 'Sign in']]
     .concat(canRegister ? [[MODES.REGISTER, 'Register']] : [])
@@ -231,6 +254,17 @@ export default function AuthScreen() {
                 keyboardType="number-pad"
                 maxLength={6}
               />
+              {otp.needsName ? (
+                <Field
+                  label="Your name"
+                  value={form.full_name}
+                  onChangeText={set('full_name')}
+                  placeholder="Your name"
+                  autoCapitalize="words"
+                  hint="This number has no account yet, so this creates one."
+                />
+              ) : null}
+
               {otp.devCode ? (
                 <Banner kind="warn">
                   Development mode: your code is {otp.devCode}. In production this arrives by WhatsApp or SMS.

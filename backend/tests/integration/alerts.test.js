@@ -15,7 +15,10 @@ const {
   ACCOUNTS, NITK, goOnDuty, clearActiveBooking, bookAndAwaitOffer,
 } = require('../helpers');
 
-const { db } = require('../../src/db');
+// Required lazily: src/db resolves DB_FILE at load time, so touching it
+// before startTestServer sets that variable would bind every query - and
+// the server's own, through the module cache - to the real database.
+const database = () => require('../../src/db').db;
 
 let patient; let driver; let admin;
 
@@ -30,7 +33,7 @@ test.after(async () => { await stopTestServer(); });
 
 /** Did a WhatsApp message containing `needle` go to this number? */
 const sentTo = (phone, needle) =>
-  db.prepare(
+  database().prepare(
     `SELECT COUNT(*) AS n FROM messages
      WHERE recipient_phone = ? AND message_channel = 'WHATSAPP' AND body LIKE ?`
   ).get(phone, `%${needle}%`).n > 0;
@@ -68,18 +71,23 @@ test('the patient is told by WhatsApp when the control room cancels', async () =
 
 test('the patient is told by WhatsApp when nothing can be matched', async () => {
   await clearActiveBooking(patient);
-  // Everyone off duty, so dispatch exhausts its candidates immediately (F.7).
-  await post('/api/provider/availability', { availability_status: 'OFFLINE' }, { token: driver });
 
+  // Far outside SEARCH_RADIUS_KM, so no ambulance qualifies however many are on
+  // duty. Taking the seeded drivers offline one by one would test the same path
+  // more slowly and leave the fleet in a state later tests would inherit.
   const placed = await post('/api/bookings', {
-    ambulance_type: 'ICU', ...NITK, address_text: 'NITK main gate',
+    ambulance_type: 'ALS',
+    latitude: 12.0,
+    longitude: 75.6,
+    address_text: 'Far outside the search radius',
   }, { token: patient });
+  assert.equal(placed.status, 201, `booking was not placed: ${JSON.stringify(placed.body)}`);
   const bookingId = placed.body.booking.booking_id;
 
   await waitFor(
-    () => db.prepare('SELECT booking_status FROM bookings WHERE booking_id = ?').get(bookingId)
+    () => database().prepare('SELECT booking_status FROM bookings WHERE booking_id = ?').get(bookingId)
             .booking_status === 'FAILED' || null,
-    { label: 'booking to fail' }
+    { label: 'booking to fail', timeout: 15000 }
   );
 
   assert.ok(

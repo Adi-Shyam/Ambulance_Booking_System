@@ -7,6 +7,7 @@ import { useResync, useSocketEvent } from '../../lib/socket';
 import { confirmAction } from '../../lib/confirm';
 import { colors, dateTimeOf, money, spacing } from '../../lib/theme';
 import { Banner, Button, Card, H2, Loading, Pill, Row, Small } from '../../components/ui';
+import NotificationInbox from '../../components/NotificationInbox';
 
 /** The vehicle record in D2, its verification state, and the way out. */
 export default function ProfileScreen() {
@@ -99,6 +100,8 @@ export default function ProfileScreen() {
           </View>
         </Card>
       ) : null}
+
+      <NotificationInbox title="Notifications" />
 
       <Button
         title="Sign out"

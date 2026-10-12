@@ -2,7 +2,7 @@
 
 Ambulance Booking System — Team 16, IT303.
 
-Generated from an actual run by `npm run test:report` on 2026-10-12T09:11:38.926Z.
+Generated from an actual run by `npm run test:report` on 2026-10-12T09:41:26.919Z.
 Do not edit by hand; re-run the command instead.
 
 ## Summary
@@ -10,11 +10,11 @@ Do not edit by hand; re-run the command instead.
 | Level | Purpose | Tests | Passed | Failed |
 |---|---|---|---|---|
 | Unit | One module in isolation | 76 | 76 | 0 |
-| Integration | Modules working together over HTTP and the database | 53 | 53 | 0 |
+| Integration | Modules working together over HTTP and the database | 59 | 59 | 0 |
 | System | Whole-system behaviour and failure recovery | 11 | 11 | 0 |
-| **Total** | | **140** | **140** | **0** |
+| **Total** | | **146** | **146** | **0** |
 
-All 140 tests passed.
+All 146 tests passed.
 
 ## Unit tests
 
@@ -52,8 +52,14 @@ All 140 tests passed.
 | 8 | booking privacy (NF.3, C.1) | Pass |
 | 9 | brute-force protection (NF.3) | Pass |
 | 10 | administration and analytics (F.13) | Pass |
-| 11 | signing in writes to D1 (DFD 0.1.3) | Pass |
-| 12 | a user can see and end their sessions | Pass |
+| 11 | a correct code on an unknown number asks for a name rather than failing | Pass |
+| 12 | supplying a name creates the account and returns a session | Pass |
+| 13 | an OTP-only account cannot be signed into with a password | Pass |
+| 14 | an OTP-only account can set a first password without knowing one | Pass |
+| 15 | a provider registered by OTP still starts PENDING | Pass |
+| 16 | nobody can register themselves as an administrator by OTP | Pass |
+| 17 | signing in writes to D1 (DFD 0.1.3) | Pass |
+| 18 | a user can see and end their sessions | Pass |
 
 ## System tests
 

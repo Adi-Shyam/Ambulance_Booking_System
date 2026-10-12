@@ -104,8 +104,19 @@ export function AuthProvider({ children }) {
 
       requestOtp: (phone_no) => api.post('/api/auth/otp/request', { phone_no }),
 
-      async verifyOtp(roleKey, phone_no, otp_code) {
-        return adopt(await api.post('/api/auth/otp/verify', { phone_no, otp_code }), roleKey);
+      /**
+       * A correct code on an unknown number registers it (F.1). The server
+       * asks for a name when it needs one rather than failing, so `details`
+       * carries whatever the screen has collected.
+       */
+      async verifyOtp(roleKey, phone_no, otp_code, details = {}) {
+        const role = roleFor(roleKey);
+        const body = { phone_no, otp_code, ...details };
+        // The provider console covers two role codes; default new accounts
+        // there to DRIVER, which the person can turn into an organisation when
+        // they add their vehicle.
+        if (!body.role_code) body.role_code = role?.roleCode || (roleKey === 'PROVIDER' ? 'DRIVER' : 'USER');
+        return adopt(await api.post('/api/auth/otp/verify', body), roleKey);
       },
 
       /**

@@ -146,16 +146,17 @@ Timers are re-armed on restart, so a server bounce mid-offer does not strand a r
 cd backend && npm test
 ```
 
-140 tests, no external services required — the suite boots the API on an ephemeral
+146 tests, no external services required — the suite boots the API on an ephemeral
 port against a throwaway database, and the WhatsApp and maps adapters fall back to
 their offline paths.
 
 | Level | Suite | Covers |
 |---|---|---|
 | Unit (76) | `tests/unit/*.test.js` | Fare arithmetic, geodesy, polyline decoding, identifier formats, timezone bucketing, rate-limit windows, data-dictionary validators, gateway signature verification, WhatsApp template parameters |
-| Integration (53) | `tests/integration/api.test.js` | Auth and RBAC, the full booking → dispatch → trip → invoice → rating lifecycle, automatic reassignment, privacy, rate limiting, admin reports and the audit trail |
+| Integration (59) | `tests/integration/api.test.js` | Auth and RBAC, the full booking → dispatch → trip → invoice → rating lifecycle, automatic reassignment, privacy, rate limiting, admin reports and the audit trail |
 | | `tests/integration/session.test.js` | Session records in D1, listing and ending your own sessions |
 | | `tests/integration/alerts.test.js` | That the lifecycle steps nobody is watching the screen for also leave the building as WhatsApp alerts |
+| | `tests/integration/otp-register.test.js` | Registering by code, OTP-only accounts setting a first password, and that nobody can make themselves an administrator that way |
 | System (11) | `tests/system/recovery.test.js` | Recovery sweep, availability consistency, reporting calendar, batch list queries |
 
 Run one level at a time with `npm run test:unit`, `test:integration` or `test:system`;

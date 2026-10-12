@@ -16,10 +16,10 @@ conventional status code: 400 validation, 401 authentication, 403 role or owners
 | POST | `/api/auth/register` | *public.* `full_name`, `phone_no`, `password`, optional `email_id`, `role_code` (`USER`\|`DRIVER`\|`ORG`). Returns a session. Patients are `VERIFIED` at once; providers start `PENDING`. |
 | POST | `/api/auth/login` | *public.* `phone_no`, `password`, optional `role_code`. A `role_code` that does not match the account is rejected with 403 — this is F.2's mode check. |
 | POST | `/api/auth/otp/request` | *public.* `phone_no`. Issues a 6-digit code valid 5 minutes. Returns `otp_code` while `EXPOSE_OTP_IN_RESPONSE=true`. |
-| POST | `/api/auth/otp/verify` | *public.* `phone_no`, `otp_code`. Returns a session. |
+| POST | `/api/auth/otp/verify` | *public.* `phone_no`, `otp_code`. Returns a session. A correct code on a number with no account **registers it** when `full_name` is also sent, with optional `role_code` (`USER`\|`DRIVER`\|`ORG`, never `ADMIN`) and `email_id`; it returns 201. Without a name it answers 404 with `needs_registration: true` so the client knows what is missing. Accounts made this way have no password — the schema allows a NULL hash for exactly these. |
 | GET | `/api/auth/me` | Current user, provider profile and organisation. |
 | PATCH | `/api/auth/me` | `full_name`, `email_id`. |
-| POST | `/api/auth/password` | `current_password`, `new_password`. |
+| POST | `/api/auth/password` | `new_password`, plus `current_password` unless the account has none — one registered by OTP sets its first password with the bearer token alone, since demanding a password it never had would strand it on code-only sign-in. |
 | POST | `/api/auth/logout` | Revokes *this* session in D1 by its `jti`, so the token stops being accepted immediately rather than at its 24-hour expiry. Clearing it on the device alone would not. |
 | GET | `/api/auth/sessions` | The account's own last 25 sessions — issued, expiry, revoked — with `current: true` on the one making the request. This is what DFD 0.1.3 writes. |
 

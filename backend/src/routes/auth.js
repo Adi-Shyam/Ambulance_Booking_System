@@ -154,8 +154,44 @@ router.post('/otp/verify', otpVerifyLimiter, asyncRoute(async (req, res) => {
 
   db.prepare('UPDATE otps SET consumed = 1 WHERE id = ?').run(row.id);
 
-  const user = findUserByPhone(phone_no);
-  if (!user) return res.status(404).json({ error: 'No account found for this mobile number' });
+  let user = findUserByPhone(phone_no);
+
+  // F.1: a verified code on an unknown number is a registration, not a dead
+  // end. The schema allows a NULL password_hash precisely for these - they
+  // sign in by code every time rather than holding a password they never set.
+  if (!user) {
+    const full_name = req.body.full_name ? v.name(req.body.full_name) : null;
+    if (!full_name) {
+      return res.status(404).json({
+        error: 'This number has no account yet. Send your name to create one.',
+        needs_registration: true,
+      });
+    }
+
+    // Never by code: an administrator is created by another administrator
+    // (F.13), and a provider still has to submit a vehicle for verification.
+    const role_code = v.oneOf(req.body.role_code || 'USER', ['USER', 'DRIVER', 'ORG'], 'role_code');
+    const now = nowIso();
+    const user_id = nextId('user');
+
+    db.prepare(
+      `INSERT INTO users (user_id, full_name, phone_no, email_id, password_hash, role_code,
+                          verification_status, registration_date, created_at, updated_at)
+       VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`
+    ).run(
+      user_id, full_name, phone_no, v.email(req.body.email_id), role_code,
+      role_code === 'USER' ? 'VERIFIED' : 'PENDING',
+      now.slice(0, 10), now, now
+    );
+
+    audit('USER_REGISTERED', {
+      actorUserId: user_id, actorRole: role_code, entityType: 'user', entityId: user_id,
+      details: { phone_no, role_code, via: 'otp' },
+    });
+
+    user = findUserByPhone(phone_no);
+    return res.status(201).json({ message: 'Account created', ...sessionResponse(user) });
+  }
 
   if (user.verification_status === 'PENDING' && user.role_code === 'USER') {
     db.prepare('UPDATE users SET verification_status = ?, updated_at = ? WHERE user_id = ?')
@@ -255,17 +291,30 @@ router.patch('/me', authenticate, asyncRoute(async (req, res) => {
 }));
 
 router.post('/password', authenticate, asyncRoute(async (req, res) => {
-  const current = String(v.required(req.body.current_password, 'current_password'));
   const next = v.password(req.body.new_password, 'new_password');
 
-  if (!req.user.password_hash || !bcrypt.compareSync(current, req.user.password_hash)) {
-    return res.status(401).json({ error: 'Current password is incorrect' });
+  // An account registered by OTP has no password to confirm, and demanding one
+  // would strand it on code-only sign-in for ever. The bearer token is already
+  // proof of identity here, so setting the first password needs nothing more.
+  const settingFirstPassword = !req.user.password_hash;
+
+  if (!settingFirstPassword) {
+    const current = String(v.required(req.body.current_password, 'current_password'));
+    if (!bcrypt.compareSync(current, req.user.password_hash)) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
   }
+
   db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE user_id = ?')
     .run(bcrypt.hashSync(next, 12), nowIso(), req.user.user_id);
 
-  audit('PASSWORD_CHANGED', { actorUserId: req.user.user_id, entityType: 'user', entityId: req.user.user_id });
-  res.json({ message: 'Password updated' });
+  audit(settingFirstPassword ? 'PASSWORD_SET' : 'PASSWORD_CHANGED', {
+    actorUserId: req.user.user_id, entityType: 'user', entityId: req.user.user_id,
+  });
+  res.json({
+    message: settingFirstPassword ? 'Password set' : 'Password updated',
+    first_password: settingFirstPassword,
+  });
 }));
 
 module.exports = router;
