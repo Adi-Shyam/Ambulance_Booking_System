@@ -13,6 +13,8 @@ const maps = require('../services/maps');
 const fare = require('../services/fare');
 const sockets = require('../realtime/socket');
 const notifications = require('../services/notifications');
+const messaging = require('../services/messaging');
+const config = require('../config');
 
 const router = express.Router();
 const asyncRoute = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -244,6 +246,17 @@ router.post('/:bookingId/cancel', authenticate, asyncRoute(async (req, res) => {
       eventType: 'CANCELLED',
       bookingId: booking.booking_id,
     });
+
+    // A driver already on the way is the least likely person to be watching
+    // the screen, and the most costly one to leave driving to a cancelled job.
+    messaging
+      .sendWhatsApp({
+        phoneNo: provider.phone_no,
+        bookingId: booking.booking_id,
+        templateId: config.whatsapp.templates.status,
+        ...messaging.templates.bookingCancelled({ booking, reason }),
+      })
+      .catch(() => {});
   }
 
   audit('BOOKING_CANCELLED', {

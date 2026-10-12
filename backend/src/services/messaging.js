@@ -227,6 +227,90 @@ const templates = {
       ],
     };
   },
+
+  // ----------------------------------------------------------------------
+  // The messages below cover the moments where the person is least likely to
+  // be looking at the app: a driver already heading somewhere, or a patient
+  // waiting on an ambulance that is not coming. An in-app notification alone
+  // is not enough when nobody is watching the screen.
+  // ----------------------------------------------------------------------
+
+  /** To the patient: nothing could be matched (F.7 exhausted). */
+  dispatchFailed({ booking, reason }) {
+    return {
+      body: [
+        'NO AMBULANCE AVAILABLE',
+        `Booking: ${booking.booking_id}`,
+        reason,
+        'Please try again, or call 108 immediately if this is an emergency.',
+      ].join('\n'),
+      params: [booking.booking_id, reason],
+    };
+  },
+
+  /** To the driver: the job they may already be driving to is off. */
+  bookingCancelled({ booking, reason }) {
+    return {
+      body: [
+        'BOOKING CANCELLED',
+        `Booking: ${booking.booking_id}`,
+        `Reason: ${reason}`,
+        'You do not need to continue to this pickup. You are available for new requests.',
+      ].join('\n'),
+      params: [booking.booking_id, reason],
+    };
+  },
+
+  /** To the patient: the control room cancelled it, not them. */
+  cancelledByControlRoom({ booking, reason }) {
+    return {
+      body: [
+        'BOOKING CANCELLED BY THE CONTROL ROOM',
+        `Booking: ${booking.booking_id}`,
+        `Reason: ${reason}`,
+        'Please book again if you still need an ambulance, or call 108.',
+      ].join('\n'),
+      params: [booking.booking_id, reason],
+    };
+  },
+
+  /** To the patient: NF.1 - the crew has gone quiet, and they should know. */
+  tripStalled({ booking }) {
+    return {
+      body: [
+        'WE HAVE LOST CONTACT WITH YOUR AMBULANCE',
+        `Booking: ${booking.booking_id}`,
+        'The crew has not reported their position recently. Our control room has been alerted.',
+        'If this is urgent, please also call 108.',
+      ].join('\n'),
+      params: [booking.booking_id],
+    };
+  },
+
+  /** To the driver: the recovery sweep took them off duty (C.6). */
+  takenOffDuty({ minutes }) {
+    return {
+      body: [
+        'YOU HAVE BEEN TAKEN OFF DUTY',
+        `Your app stopped reporting its location for more than ${minutes} minutes.`,
+        'Open the driver app and go on duty again to receive requests.',
+      ].join('\n'),
+      params: [String(minutes)],
+    };
+  },
+
+  /** To the driver: an invoice they are owed has settled. */
+  paymentReceived({ booking, invoice, paymentMode }) {
+    const amount = `Rs ${Number(invoice.fare_amount).toFixed(2)}`;
+    return {
+      body: [
+        'PAYMENT RECEIVED',
+        `Booking: ${booking.booking_id}`,
+        `Amount: ${amount} (${paymentMode})`,
+      ].join('\n'),
+      params: [booking.booking_id, amount, paymentMode],
+    };
+  },
 };
 
 module.exports = { sendWhatsApp, sendOtp, updateDeliveryState, templates, usingCloudApi, toE164 };

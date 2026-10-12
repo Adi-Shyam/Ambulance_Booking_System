@@ -22,6 +22,7 @@ const { db, nowIso, audit } = require('../db');
 const { staleCutoffIso } = require('./availability');
 const notifications = require('./notifications');
 const sockets = require('../realtime/socket');
+const messaging = require('./messaging');
 
 let timer = null;
 
@@ -33,9 +34,11 @@ let timer = null;
 function retireStaleProviders() {
   const cutoff = staleCutoffIso();
   const stale = db.prepare(
-    `SELECT provider_id, user_id FROM providers
-     WHERE availability_status = 'AVAILABLE'
-       AND (last_seen_timestamp IS NULL OR last_seen_timestamp < ?)`
+    `SELECT p.provider_id, p.user_id, u.phone_no
+     FROM providers p
+     JOIN users u ON u.user_id = p.user_id
+     WHERE p.availability_status = 'AVAILABLE'
+       AND (p.last_seen_timestamp IS NULL OR p.last_seen_timestamp < ?)`
   ).all(cutoff);
 
   for (const provider of stale) {
@@ -53,6 +56,16 @@ function retireStaleProviders() {
       body: `Your app stopped reporting its location for more than ${config.dispatch.providerStaleMinutes} minutes, so you were marked off duty. Go on duty again to receive requests.`,
       eventType: 'AUTO_OFFLINE',
     });
+
+    // The app has stopped reporting, so an in-app notification is the one
+    // channel least likely to reach them. WhatsApp does not depend on it.
+    messaging
+      .sendWhatsApp({
+        phoneNo: provider.phone_no,
+        templateId: config.whatsapp.templates.status,
+        ...messaging.templates.takenOffDuty({ minutes: config.dispatch.providerStaleMinutes }),
+      })
+      .catch(() => {});
 
     sockets.toProvider(provider.provider_id, 'provider:auto-offline', { reason: 'stale_location' });
     sockets.toAdmins('admin:provider:update', {
@@ -76,12 +89,14 @@ function flagAbandonedTrips() {
 
   const stalled = db.prepare(
     `SELECT b.booking_id, b.user_id, b.assigned_provider_id, t.trip_id, t.trip_milestone,
+            u.phone_no,
             COALESCE(
               (SELECT MAX(tl.gps_timestamp) FROM trip_locations tl WHERE tl.trip_id = t.trip_id),
               t.trip_start_time
             ) AS last_contact
      FROM bookings b
      JOIN trips t ON t.booking_id = b.booking_id
+     JOIN users u ON u.user_id = b.user_id
      WHERE b.booking_status IN ('ASSIGNED','ENROUTE','ARRIVED','ONBOARD')
        AND b.stall_flagged_at IS NULL`
   ).all().filter((row) => row.last_contact < silenceCutoff);
@@ -107,6 +122,15 @@ function flagAbandonedTrips() {
       eventType: 'TRIP_STALLED',
       bookingId: row.booking_id,
     });
+
+    messaging
+      .sendWhatsApp({
+        phoneNo: row.phone_no,
+        bookingId: row.booking_id,
+        templateId: config.whatsapp.templates.status,
+        ...messaging.templates.tripStalled({ booking: { booking_id: row.booking_id } }),
+      })
+      .catch(() => {});
 
     sockets.toAdmins('admin:trip:stalled', {
       booking_id: row.booking_id,

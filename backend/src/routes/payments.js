@@ -8,6 +8,8 @@ const payments = require('../services/payments');
 const fare = require('../services/fare');
 const sockets = require('../realtime/socket');
 const notifications = require('../services/notifications');
+const messaging = require('../services/messaging');
+const config = require('../config');
 
 const router = express.Router();
 const asyncRoute = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -129,7 +131,11 @@ router.post('/invoices/:invoiceId/pay', asyncRoute(async (req, res) => {
 
   if (invoice.assigned_provider_id) {
     sockets.toProvider(invoice.assigned_provider_id, 'payment:update', updated);
-    const providerUser = db.prepare('SELECT user_id FROM providers WHERE provider_id = ?').get(invoice.assigned_provider_id);
+    const providerUser = db.prepare(
+      `SELECT p.user_id, u.phone_no FROM providers p
+       JOIN users u ON u.user_id = p.user_id WHERE p.provider_id = ?`
+    ).get(invoice.assigned_provider_id);
+
     if (providerUser && result.payment_status === 'SUCCESS') {
       notifications.notify(providerUser.user_id, {
         title: 'Payment received',
@@ -137,6 +143,19 @@ router.post('/invoices/:invoiceId/pay', asyncRoute(async (req, res) => {
         eventType: 'PAYMENT',
         bookingId: invoice.booking_id,
       });
+
+      messaging
+        .sendWhatsApp({
+          phoneNo: providerUser.phone_no,
+          bookingId: invoice.booking_id,
+          templateId: config.whatsapp.templates.status,
+          ...messaging.templates.paymentReceived({
+            booking: { booking_id: invoice.booking_id },
+            invoice,
+            paymentMode: payment_mode,
+          }),
+        })
+        .catch(() => {});
     }
   }
   sockets.toAdmins('admin:payment', updated);

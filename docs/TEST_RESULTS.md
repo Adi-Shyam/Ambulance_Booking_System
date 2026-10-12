@@ -2,7 +2,7 @@
 
 Ambulance Booking System — Team 16, IT303.
 
-Generated from an actual run by `npm run test:report` on 2026-10-10T20:06:41.186Z.
+Generated from an actual run by `npm run test:report` on 2026-10-12T09:11:38.926Z.
 Do not edit by hand; re-run the command instead.
 
 ## Summary
@@ -10,11 +10,11 @@ Do not edit by hand; re-run the command instead.
 | Level | Purpose | Tests | Passed | Failed |
 |---|---|---|---|---|
 | Unit | One module in isolation | 76 | 76 | 0 |
-| Integration | Modules working together over HTTP and the database | 50 | 50 | 0 |
+| Integration | Modules working together over HTTP and the database | 53 | 53 | 0 |
 | System | Whole-system behaviour and failure recovery | 11 | 11 | 0 |
-| **Total** | | **137** | **137** | **0** |
+| **Total** | | **140** | **140** | **0** |
 
-All 137 tests passed.
+All 140 tests passed.
 
 ## Unit tests
 
@@ -42,15 +42,18 @@ All 137 tests passed.
 
 | # | Test case | Result |
 |---|---|---|
-| 1 | authentication and role-based access (F.1, F.2) | Pass |
-| 2 | booking, matching and dispatch (F.3 - F.7) | Pass |
-| 3 | automatic reassignment on decline (F.7, C.6) | Pass |
-| 4 | trip, billing and feedback (F.8 - F.12) | Pass |
-| 5 | booking privacy (NF.3, C.1) | Pass |
-| 6 | brute-force protection (NF.3) | Pass |
-| 7 | administration and analytics (F.13) | Pass |
-| 8 | signing in writes to D1 (DFD 0.1.3) | Pass |
-| 9 | a user can see and end their sessions | Pass |
+| 1 | the driver is told by WhatsApp when the job is cancelled under them | Pass |
+| 2 | the patient is told by WhatsApp when the control room cancels | Pass |
+| 3 | the patient is told by WhatsApp when nothing can be matched | Pass |
+| 4 | authentication and role-based access (F.1, F.2) | Pass |
+| 5 | booking, matching and dispatch (F.3 - F.7) | Pass |
+| 6 | automatic reassignment on decline (F.7, C.6) | Pass |
+| 7 | trip, billing and feedback (F.8 - F.12) | Pass |
+| 8 | booking privacy (NF.3, C.1) | Pass |
+| 9 | brute-force protection (NF.3) | Pass |
+| 10 | administration and analytics (F.13) | Pass |
+| 11 | signing in writes to D1 (DFD 0.1.3) | Pass |
+| 12 | a user can see and end their sessions | Pass |
 
 ## System tests
 

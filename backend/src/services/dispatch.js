@@ -498,6 +498,21 @@ function failBooking(bookingId, reason) {
     eventType: 'FAILED',
     bookingId,
   });
+
+  // The patient is waiting on an ambulance that is not coming, and may well not
+  // be watching the app. This is the one message they most need to receive.
+  const patient = db.prepare('SELECT phone_no FROM users WHERE user_id = ?').get(booking.user_id);
+  if (patient) {
+    messaging
+      .sendWhatsApp({
+        phoneNo: patient.phone_no,
+        bookingId,
+        templateId: config.whatsapp.templates.status,
+        ...messaging.templates.dispatchFailed({ booking, reason }),
+      })
+      .catch(() => {});
+  }
+
   broadcastBooking(booking);
   return null;
 }

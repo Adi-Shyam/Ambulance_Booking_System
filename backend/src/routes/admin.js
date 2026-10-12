@@ -13,6 +13,7 @@ const { staleCutoffIso, dispatchablePredicate } = require('../services/availabil
 const { localDay, localHour, todayLocal, daysAgoLocal, offsetLabel } = require('../utils/localDate');
 const notifications = require('../services/notifications');
 const messaging = require('../services/messaging');
+const config = require('../config');
 const sockets = require('../realtime/socket');
 
 const router = express.Router();
@@ -295,6 +296,20 @@ router.post('/bookings/:bookingId/cancel', asyncRoute(async (req, res) => {
     eventType: 'CANCELLED',
     bookingId: booking.booking_id,
   });
+
+  // The patient did not do this, so they get no feedback from their own
+  // actions - telling them out of band is the only way they find out.
+  const patient = db.prepare('SELECT phone_no FROM users WHERE user_id = ?').get(booking.user_id);
+  if (patient) {
+    messaging
+      .sendWhatsApp({
+        phoneNo: patient.phone_no,
+        bookingId: booking.booking_id,
+        templateId: config.whatsapp.templates.status,
+        ...messaging.templates.cancelledByControlRoom({ booking, reason }),
+      })
+      .catch(() => {});
+  }
 
   const updated = dispatch.getBooking(booking.booking_id);
   dispatch.broadcastBooking(updated);
