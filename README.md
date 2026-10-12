@@ -352,8 +352,8 @@ code runs on an iPhone through Expo Go if you ever want to show it.
 
 ## Notes on scope
 
-- The mobile apps use Leaflet in a WebView for maps rather than `react-native-maps`,
-  so they run in plain Expo Go with no Google Maps key and no custom dev build.
+- The app uses Leaflet in a WebView for maps rather than `react-native-maps`, so it
+  runs in plain Expo Go with no Google Maps key and no custom dev build.
 - Location is reported while the app is in the foreground. Background tracking needs
   a development build and the `expo-location` background permission.
 - Push notifications go over the Socket.IO channel. Adding Expo push tokens would
