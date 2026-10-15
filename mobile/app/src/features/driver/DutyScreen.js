@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import * as Location from 'expo-location';
+import { readPosition as readDevicePosition } from '../../lib/location';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -173,27 +173,17 @@ export default function DutyScreen({ navigation }) {
    * loop runs every 20 seconds, and prompting on each pass would either nag the
    * driver or, once they have refused, throw on every tick for nothing.
    */
-  const ensurePermission = useCallback(async () => {
-    const held = await Location.getForegroundPermissionsAsync();
-    if (held.granted) return true;
-    if (!held.canAskAgain) return false;
-    const asked = await Location.requestForegroundPermissionsAsync();
-    return asked.granted;
-  }, []);
-
   const readPosition = useCallback(async () => {
-    if (!(await ensurePermission())) {
-      setGpsDenied(true);
-      throw new Error('Location permission was declined. Tap the map below to set your position instead.');
+    try {
+      const pos = await readDevicePosition();
+      setGpsDenied(false);
+      return pos;
+    } catch (err) {
+      // A refusal is a state the screen shows; everything else is a message.
+      if (err.code === 'DENIED') setGpsDenied(true);
+      throw err;
     }
-    setGpsDenied(false);
-    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-    return {
-      latitude: Number(pos.coords.latitude.toFixed(6)),
-      longitude: Number(pos.coords.longitude.toFixed(6)),
-      speed_kmph: pos.coords.speed != null && pos.coords.speed >= 0 ? Number((pos.coords.speed * 3.6).toFixed(1)) : undefined,
-    };
-  }, [ensurePermission]);
+  }, []);
 
   const sendPing = useCallback(async (coords) => {
     const body = coords || positionRef.current;

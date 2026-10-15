@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import * as Location from 'expo-location';
+import { readPosition as readDevicePosition } from '../../lib/location';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
@@ -49,20 +49,19 @@ export default function BookScreen({ navigation }) {
     setLocating(true);
     setError('');
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setError('Location permission was declined. Type an address or tap the map to drop a pin instead.');
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const coords = {
-        latitude: Number(pos.coords.latitude.toFixed(6)),
-        longitude: Number(pos.coords.longitude.toFixed(6)),
-      };
+      // Times out and falls back to a cached fix rather than waiting for one
+      // that may never come - this runs on mount, so a hang here is a screen
+      // that never finishes loading.
+      const pos = await readDevicePosition();
+      const coords = { latitude: pos.latitude, longitude: pos.longitude };
       const rev = await api.get(`/api/geo/reverse?lat=${coords.latitude}&lng=${coords.longitude}`);
       setPickup({ ...coords, address_text: rev.location.address_text, pincode: rev.location.pincode });
     } catch (e) {
-      setError(e.message || 'Could not read your location');
+      setError(
+        e.code === 'DENIED'
+          ? 'Location permission was declined. Type an address or tap the map to drop a pin instead.'
+          : e.message || 'Could not read your location'
+      );
     } finally {
       setLocating(false);
     }

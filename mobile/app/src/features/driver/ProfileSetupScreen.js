@@ -76,7 +76,13 @@ export default function ProfileSetupScreen() {
 
           <Text style={[typo.small, { marginBottom: 8 }]}>Ambulance type</Text>
           <View style={{ gap: spacing.sm, marginBottom: spacing.md }}>
-            {AMBULANCE_TYPES.map((t) => (
+            {/*
+              Request types, minus EMG: that one means "send whatever is
+              nearest", so no vehicle is registered as it and the server
+              refuses one that tries. Offering it here would be offering a
+              choice that can only fail.
+            */}
+            {AMBULANCE_TYPES.filter((t) => !t.urgent).map((t) => (
               <Pressable
                 key={t.code}
                 onPress={() => setAmbulanceType(t.code)}

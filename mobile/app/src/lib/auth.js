@@ -28,23 +28,28 @@ export function AuthProvider({ children }) {
     });
 
     (async () => {
-      // The stored backend address has to be in place before the first
-      // request, otherwise boot would talk to the compiled-in default.
-      await loadBaseUrl();
-
-      const token = await loadToken();
-      if (!token) {
-        setBooting(false);
-        return;
-      }
+      // One try/finally around the whole thing. `booting` gates the entire
+      // app behind a "Starting up..." screen, so anything that throws before
+      // it is cleared - storage unavailable, a malformed stored address -
+      // leaves the app on that screen with no way forward.
       try {
+        // The stored backend address has to be in place before the first
+        // request, otherwise boot would talk to the compiled-in default.
+        await loadBaseUrl();
+
+        const token = await loadToken();
+        if (!token) return;
+
         const me = await api.get('/api/auth/me');
         setUser(me.user);
         setProvider(me.provider);
         setMode(modeForRoleCode(me.user.role_code));
         connectSocket();
-      } catch {
-        await clearToken();
+      } catch (err) {
+        // A token that cannot be used is worse than none: it would send the
+        // app to a signed-in screen that then fails every request.
+        console.warn('[auth] starting signed out:', err.message);
+        await clearToken().catch(() => {});
       } finally {
         setBooting(false);
       }
