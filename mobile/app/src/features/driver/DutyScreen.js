@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { readPosition as readDevicePosition } from '../../lib/location';
+import { offerAlert } from '../../lib/alerts';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -121,6 +122,16 @@ export default function DutyScreen({ navigation }) {
   useSocketEvent('offer:new', (payload) => {
     const offer = normaliseOffer(payload);
     setOffers((prev) => [offer, ...prev.filter((o) => o.assignment_id !== offer.assignment_id)]);
+
+    // The card appearing is not an alert: a driver is not watching the screen,
+    // and the offer expires in 45 seconds. This raises a real notification
+    // from the device itself - banner, sound, vibration - which needs no push
+    // service and so works in this build today.
+    //
+    // It only fires while the app is running, because the socket that carried
+    // the offer dies with the process. Reaching a closed app is what FCM is
+    // for.
+    offerAlert(offer);
   }, []);
 
   useSocketEvent('offer:closed', ({ assignment_id, result }) => {

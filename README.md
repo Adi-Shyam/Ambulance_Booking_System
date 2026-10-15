@@ -260,9 +260,27 @@ true road distance, and the gap narrows as the ping interval shortens.
 
 ## Alerts and calling
 
-**Push notifications** are the only channel that reaches a phone whose app is
-closed, which makes them the one that decides whether a dispatch offer is seen
-at all — everything else in the app assumes somebody is looking. The socket
+**Reaching a driver** happens on two levels, and they are worth keeping apart.
+
+A *local* alert is raised by the app itself: a heads-up banner, a sound and a
+vibration, scheduled on the device and delivered by the operating system. It
+needs no push service, no credentials and no money, and it is what makes a
+45-second offer noticeable rather than merely present on a screen nobody is
+looking at. It only fires while the app is running, because the socket that
+carried the offer dies with the process.
+
+A *push* notification is the only thing that reaches a phone whose app is
+closed. On Android that means Firebase Cloud Messaging, and **this build has
+no FCM credentials**, so `getExpoPushTokenAsync` fails and nothing is ever
+sent. Expo Go works because it carries Expo's own credentials; a built APK
+does not. Fixing it needs a Firebase project, its service-account key uploaded
+with `eas credentials`, and a rebuild.
+
+Until then the alerts panel says exactly that rather than reporting a flat
+failure, and the test button demonstrates the local alert instead.
+
+**Push notifications**, when configured, are the channel that decides whether
+a dispatch offer is seen at all — everything else in the app assumes somebody is looking. The socket
 needs the app open; the inbox needs the screen on; a driver waiting for work is
 doing neither, and an offer expires in 45 seconds.
 

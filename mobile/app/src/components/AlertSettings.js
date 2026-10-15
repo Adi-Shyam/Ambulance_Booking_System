@@ -3,7 +3,8 @@ import { Linking, Platform, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { registerForPush, sendTestPush } from '../lib/push';
+import { ensureNotificationPermission, registerForPush, sendTestPush } from '../lib/push';
+import { raiseLocalAlert } from '../lib/alerts';
 import { colors, spacing } from '../lib/theme';
 import { Banner, Button, Card, H2, Small } from './ui';
 
@@ -45,17 +46,27 @@ export default function AlertSettings({ title = 'Alerts' }) {
     const { token, reason, needsFcm } = await registerForPush();
     setBusy(false);
     await check();
+
     if (token) {
       setNotice('This phone is registered. Try the test alert.');
-    } else {
-      // Said plainly, because the alternative is a driver concluding the app
-      // is broken when the build simply cannot issue a token.
-      setError(
-        needsFcm
-          ? `${reason} Until then, offers still appear while this screen is open.`
-          : reason || 'Could not switch alerts on.'
-      );
+      return;
     }
+
+    // A build with no Firebase credentials cannot be sent to from a server -
+    // but permission was granted and the channel exists, so the app can still
+    // raise its own alert while it is running. Saying only "failed" would let
+    // a driver conclude nothing works, when most of it does.
+    const local = await ensureNotificationPermission();
+    if (needsFcm && local) {
+      setNotice(
+        'Alerts will sound while the app is open, including when it is in the '
+        + 'background. Reaching this phone with the app closed needs Firebase '
+        + 'credentials on the build.'
+      );
+      return;
+    }
+
+    setError(reason || 'Could not switch alerts on.');
   }
 
   async function test() {
@@ -66,7 +77,22 @@ export default function AlertSettings({ title = 'Alerts' }) {
       const r = await sendTestPush();
       setNotice(r.message);
     } catch (e) {
-      setError(e.message);
+      // 409 means the server has no device to send to, which is the normal
+      // state of a build with no Firebase credentials. The local path is the
+      // one that works here, so test that instead of reporting a failure -
+      // what the driver wants to know is whether their phone will make a
+      // noise, and it will.
+      if (e.status === 409) {
+        await raiseLocalAlert({
+          emergency: true,
+          title: 'Alerts are working',
+          body: 'This is what a dispatch offer will look like.',
+          data: { type: 'TEST' },
+        });
+        setNotice('That is what an emergency will look and sound like, while the app is running.');
+      } else {
+        setError(e.message);
+      }
     } finally {
       setBusy(false);
     }
@@ -90,8 +116,8 @@ export default function AlertSettings({ title = 'Alerts' }) {
         <>
           <Small style={{ marginTop: spacing.sm }}>
             {granted
-              ? 'This phone will be alerted even with the app closed.'
-              : 'Without alerts you will only see a request while this screen is open — and a request expires in 45 seconds.'}
+              ? 'Requests will sound and vibrate while the app is running, including in the background.'
+              : 'Without alerts a request only appears on this screen — and it expires in 45 seconds.'}
           </Small>
 
           <Banner kind="error">{error}</Banner>
