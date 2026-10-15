@@ -25,6 +25,13 @@ services:
     healthCheckPath: /health
 
     envVars:
+      # node:sqlite arrived in Node 22.5, and the whole persistence layer is
+      # built on it. Render's default runtime version is not guaranteed to be
+      # new enough, and the failure would be at boot with a bare "no such
+      # built-in module", so it is pinned rather than inferred.
+      - key: NODE_VERSION
+        value: 22.17.0
+
       - key: NODE_ENV
         value: production
 
@@ -45,8 +52,10 @@ services:
 
       - key: EMAIL_PROVIDER
         value: brevo
+      # Brevo rejects a sender it has not verified, so this must match one
+      # listed under Senders, Domains & Dedicated IPs in the Brevo dashboard.
       - key: EMAIL_FROM
-        value: Ambulance Booking System <no-reply@nitk.ac.in>
+        value: Ambulance Booking System <mr.cool0631@gmail.com>
 
       # Set in the dashboard, not here: this file is in version control.
       - key: BREVO_API_KEY
