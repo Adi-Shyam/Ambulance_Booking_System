@@ -2,7 +2,7 @@
 
 Ambulance Booking System — Team 16, IT303.
 
-Generated from an actual run by `npm run test:report` on 2026-10-15T16:26:05.661Z.
+Generated from an actual run by `npm run test:report` on 2026-10-15T18:10:29.046Z.
 Do not edit by hand; re-run the command instead.
 
 ## Summary
@@ -10,11 +10,11 @@ Do not edit by hand; re-run the command instead.
 | Level | Purpose | Tests | Passed | Failed |
 |---|---|---|---|---|
 | Unit | One module in isolation | 91 | 91 | 0 |
-| Integration | Modules working together over HTTP and the database | 88 | 88 | 0 |
+| Integration | Modules working together over HTTP and the database | 94 | 94 | 0 |
 | System | Whole-system behaviour and failure recovery | 11 | 11 | 0 |
-| **Total** | | **190** | **190** | **0** |
+| **Total** | | **196** | **196** | **0** |
 
-All 190 tests passed.
+All 196 tests passed.
 
 ## Unit tests
 
@@ -74,24 +74,28 @@ All 190 tests passed.
 | 27 | EMG is a request, so no ambulance can be registered or reclassified as one | Pass |
 | 28 | an emergency has a fare rule of its own | Pass |
 | 29 | the control room can filter bookings by EMG | Pass |
-| 30 | a code can be sent to an email address instead of WhatsApp | Pass |
+| 30 | a code to an address is logged as an email | Pass |
 | 31 | the response masks where the code went | Pass |
-| 32 | verifying an emailed code registers the account and keeps the address | Pass |
-| 33 | an existing account needs no address: the one on file is used | Pass |
-| 34 | an email channel with nowhere to send says so rather than failing silently | Pass |
-| 35 | a driver with no address on file is told to use WhatsApp | Pass |
-| 36 | an unrecognised channel is refused | Pass |
-| 37 | omitting the channel still sends by the phone, unchanged | Pass |
-| 38 | a code for an unknown number needs purpose REGISTER, not the LOGIN default | Pass |
-| 39 | a correct code on an unknown number asks for a name rather than failing | Pass |
-| 40 | supplying a name creates the account and returns a session | Pass |
-| 41 | an OTP-only account cannot be signed into with a password | Pass |
-| 42 | an OTP-only account can set a first password without knowing one | Pass |
-| 43 | one code survives the round trip that asks for a name | Pass |
-| 44 | a provider registered by OTP still starts PENDING | Pass |
-| 45 | nobody can register themselves as an administrator by OTP | Pass |
-| 46 | signing in writes to D1 (DFD 0.1.3) | Pass |
-| 47 | a user can see and end their sessions | Pass |
+| 32 | the row records what is being proved and how it travelled | Pass |
+| 33 | an existing account can be sent a code to prove its number | Pass |
+| 34 | proving a number by email uses the address already on that account | Pass |
+| 35 | verifying a number marks the number, not the address | Pass |
+| 36 | a code for a number nobody holds is not a registration | Pass |
+| 37 | a request naming neither an address nor a number is refused | Pass |
+| 38 | an unrecognised channel is refused | Pass |
+| 39 | an address can only ever be reached by email | Pass |
+| 40 | a code for an unknown address needs purpose REGISTER, not the LOGIN default | Pass |
+| 41 | a correct code on an unknown address asks for what is missing | Pass |
+| 42 | a name and a number create the account and return a session | Pass |
+| 43 | the client is told which contacts are proved | Pass |
+| 44 | an OTP-only account cannot be signed into with a password | Pass |
+| 45 | an OTP-only account can set a first password without knowing one | Pass |
+| 46 | one code survives the round trip that asks for more | Pass |
+| 47 | a number already registered to someone else is refused | Pass |
+| 48 | a provider registered by email still starts PENDING | Pass |
+| 49 | nobody can register themselves as an administrator | Pass |
+| 50 | signing in writes to D1 (DFD 0.1.3) | Pass |
+| 51 | a user can see and end their sessions | Pass |
 
 ## System tests
 

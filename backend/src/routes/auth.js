@@ -48,6 +48,8 @@ const asyncRoute = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next
 
 const OTP_TTL_MS = 5 * 60 * 1000; // Data Dictionary: issue time + 5 min
 const findUserByPhone = (phone) => db.prepare('SELECT * FROM users WHERE phone_no = ?').get(phone);
+const findUserByEmail = (email) =>
+  db.prepare('SELECT * FROM users WHERE email_id = ?').get(String(email).trim().toLowerCase());
 
 function sessionResponse(user) {
   const provider = db.prepare('SELECT * FROM providers WHERE user_id = ?').get(user.user_id) || null;
@@ -60,6 +62,10 @@ function sessionResponse(user) {
       full_name: user.full_name,
       phone_no: user.phone_no,
       email_id: user.email_id,
+      // Which contact details have actually been proved. The app shows this
+      // rather than letting a collected number look like a checked one.
+      email_verified: Boolean(user.email_verified),
+      phone_verified: Boolean(user.phone_verified),
       role_code: user.role_code,
       verification_status: user.verification_status,
       registration_date: user.registration_date,
@@ -73,12 +79,21 @@ function sessionResponse(user) {
 router.post('/register', registerLimiter, asyncRoute(async (req, res) => {
   const full_name = v.name(req.body.full_name);
   const phone_no = v.phone(req.body.phone_no);
-  const email_id = v.email(req.body.email_id);
+  // Required, not optional: an address is how an account is reached and how it
+  // is proved. The number beside it is contact data for the crew, and nothing
+  // here checks that it is real - see `phone_verified`.
+  const email_id = v.email(v.required(req.body.email_id, 'email_id'));
   const role_code = v.oneOf(req.body.role_code || 'USER', ['USER', 'DRIVER', 'ORG'], 'role_code');
   const password = v.password(req.body.password);
 
   if (findUserByPhone(phone_no)) {
     return res.status(409).json({ error: 'An account already exists for this mobile number' });
+  }
+  if (findUserByEmail(email_id)) {
+    return res.status(409).json({
+      error: 'An account already exists for this email address',
+      field: 'email_id',
+    });
   }
 
   const now = nowIso();
@@ -88,9 +103,10 @@ router.post('/register', registerLimiter, asyncRoute(async (req, res) => {
   const verification_status = role_code === 'USER' ? 'VERIFIED' : 'PENDING';
 
   db.prepare(
-    `INSERT INTO users (user_id, full_name, phone_no, email_id, password_hash, role_code,
-                        verification_status, registration_date, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO users (user_id, full_name, phone_no, email_id, email_verified, phone_verified,
+                        password_hash, role_code, verification_status, registration_date,
+                        created_at, updated_at)
+     VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?)`
   ).run(
     user_id, full_name, phone_no, email_id,
     bcrypt.hashSync(password, 12),           // bcrypt digest, cost 12
@@ -110,34 +126,54 @@ router.post('/register', registerLimiter, asyncRoute(async (req, res) => {
 }));
 
 // Passwordless / verification OTP
+//
+// A code proves control of one contact detail, so the request names the detail
+// rather than the account: `email_id` to verify an address, `phone_no` to
+// verify a number. Registration uses the email, because an email can be
+// verified for nothing while proving a phone number needs an SMS gateway or an
+// unblocked WhatsApp sender.
 router.post('/otp/request', otpRequestLimiter, asyncRoute(async (req, res) => {
-  const phone_no = v.phone(req.body.phone_no);
   const purpose = String(req.body.purpose || 'LOGIN').toUpperCase();
 
-  // Which channel carries the code. The account is still identified by its
-  // phone number either way - the data dictionary makes `phone_no` NOT NULL
-  // UNIQUE, and a driver who cannot find the patient has to be able to ring
-  // them - so this chooses a postman, not an identity.
-  const channel = v.oneOf(
-    String(req.body.channel || 'WHATSAPP').toUpperCase(), ['WHATSAPP', 'EMAIL'], 'channel'
-  );
+  const email_id = req.body.email_id ? v.email(req.body.email_id) : null;
+  const phone_no = req.body.phone_no ? v.phone(req.body.phone_no) : null;
 
-  const existing = findUserByPhone(phone_no);
-  if (purpose === 'LOGIN' && !existing) {
-    return res.status(404).json({ error: 'No account found for this mobile number' });
+  if (!email_id && !phone_no) {
+    return res.status(400).json({
+      error: 'Send the email address to verify.',
+      field: 'email_id',
+    });
   }
 
-  // An email channel needs an address. For an existing account that is the one
-  // already on file; for a registration the account does not exist yet, so the
-  // address has to arrive with the request.
-  let email_id = null;
-  if (channel === 'EMAIL') {
-    email_id = v.email(req.body.email_id) || existing?.email_id || null;
-    if (!email_id) {
+  // What is being verified, and how the code travels to it. Verifying an
+  // address can only go by email; verifying a number defaults to WhatsApp but
+  // may be emailed to an account that already has an address on file.
+  const identifier_type = email_id ? 'EMAIL' : 'PHONE';
+  const identifier = email_id || phone_no;
+
+  const existing = email_id ? findUserByEmail(email_id) : findUserByPhone(phone_no);
+  if (purpose === 'LOGIN' && !existing) {
+    return res.status(404).json({
+      error: email_id
+        ? 'No account found for this email address'
+        : 'No account found for this mobile number',
+    });
+  }
+
+  let channel = v.oneOf(
+    String(req.body.channel || (email_id ? 'EMAIL' : 'WHATSAPP')).toUpperCase(),
+    ['WHATSAPP', 'EMAIL'], 'channel'
+  );
+  if (identifier_type === 'EMAIL') channel = 'EMAIL';   // nothing else reaches an address
+
+  // Where the code actually goes. Verifying a number by email uses the address
+  // already on that account; there is nowhere else it could go.
+  let destination = identifier;
+  if (channel === 'EMAIL' && identifier_type === 'PHONE') {
+    destination = existing?.email_id || null;
+    if (!destination) {
       return res.status(400).json({
-        error: existing
-          ? 'This account has no email address on file. Add one, or ask for the code by WhatsApp.'
-          : 'Send the email address the code should go to.',
+        error: 'This account has no email address on file. Ask for the code by WhatsApp instead.',
         field: 'email_id',
       });
     }
@@ -145,20 +181,30 @@ router.post('/otp/request', otpRequestLimiter, asyncRoute(async (req, res) => {
 
   const otp_code = String(Math.floor(100000 + Math.random() * 900000));
   const otp_expiry = new Date(Date.now() + OTP_TTL_MS).toISOString();
-  const destination = channel === 'EMAIL' ? email_id : phone_no;
 
-  db.prepare('UPDATE otps SET consumed = 1 WHERE phone_no = ? AND consumed = 0').run(phone_no);
+  db.prepare('UPDATE otps SET consumed = 1 WHERE identifier = ? AND consumed = 0').run(identifier);
   db.prepare(
-    `INSERT INTO otps (phone_no, otp_code, otp_expiry, purpose, channel, destination, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(phone_no, otp_code, otp_expiry, purpose, channel, destination, nowIso());
+    `INSERT INTO otps (identifier, identifier_type, otp_code, otp_expiry, purpose,
+                       channel, destination, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(identifier, identifier_type, otp_code, otp_expiry, purpose, channel, destination, nowIso());
 
-  await messaging.sendOtp({ phoneNo: phone_no, otpCode: otp_code, channel, emailId: email_id });
-  audit('OTP_ISSUED', { entityType: 'phone', entityId: phone_no, details: { purpose, channel } });
+  await messaging.sendOtp({
+    phoneNo: phone_no || existing?.phone_no || null,
+    otpCode: otp_code,
+    channel,
+    emailId: channel === 'EMAIL' ? destination : null,
+  });
+  audit('OTP_ISSUED', {
+    entityType: identifier_type.toLowerCase(),
+    entityId: identifier,
+    details: { purpose, channel },
+  });
 
   res.json({
     message: channel === 'EMAIL' ? 'Verification code emailed' : 'Verification code sent',
     channel,
+    verifying: identifier_type,
     // Masked: enough to recognise where to look, without handing a full
     // address or number back to whoever asked for the code.
     sent_to: messaging.maskDestination(destination, channel),
@@ -169,12 +215,20 @@ router.post('/otp/request', otpRequestLimiter, asyncRoute(async (req, res) => {
 }));
 
 router.post('/otp/verify', otpVerifyLimiter, asyncRoute(async (req, res) => {
-  const phone_no = v.phone(req.body.phone_no);
   const otp_code = String(v.required(req.body.otp_code, 'otp_code')).trim();
+  const email_id = req.body.email_id ? v.email(req.body.email_id) : null;
+  const phone_no = req.body.phone_no ? v.phone(req.body.phone_no) : null;
+
+  if (!email_id && !phone_no) {
+    return res.status(400).json({ error: 'Send the email address being verified.', field: 'email_id' });
+  }
+
+  // Whichever detail the code was issued against - the same one it proves.
+  const identifier = email_id || phone_no;
 
   const row = db.prepare(
-    'SELECT * FROM otps WHERE phone_no = ? AND consumed = 0 ORDER BY id DESC LIMIT 1'
-  ).get(phone_no);
+    'SELECT * FROM otps WHERE identifier = ? AND consumed = 0 ORDER BY id DESC LIMIT 1'
+  ).get(identifier);
 
   if (!row || row.otp_code !== otp_code) {
     return res.status(401).json({ error: 'Incorrect verification code' });
@@ -183,25 +237,47 @@ router.post('/otp/verify', otpVerifyLimiter, asyncRoute(async (req, res) => {
     return res.status(401).json({ error: 'This verification code has expired' });
   }
 
-  let user = findUserByPhone(phone_no);
+  const verifyingEmail = row.identifier_type === 'EMAIL';
+  let user = verifyingEmail ? findUserByEmail(identifier) : findUserByPhone(identifier);
 
-  // F.1: a verified code on an unknown number is a registration, not a dead
-  // end. The schema allows a NULL password_hash precisely for these - they
-  // sign in by code every time rather than holding a password they never set.
+  // F.1: a verified code on an address nobody holds is a registration, not a
+  // dead end. The schema allows a NULL password_hash precisely for these -
+  // they sign in by code every time rather than holding a password they never
+  // set.
   //
   // Everything that can refuse this request is settled *before* the code is
   // consumed, because the sign-in screen asks twice: once with the code, and
-  // again with the name the first reply asked for. Consuming on the first of
-  // those left the second with no code to present, so registering from the
-  // app was impossible however correct the code was.
+  // again with the details the first reply asked for. Consuming on the first
+  // of those would leave the second with no code to present.
   let full_name = null;
   let role_code = null;
+  let new_phone = null;
   if (!user) {
+    if (!verifyingEmail) {
+      // A phone code is for proving a number on an account that exists. There
+      // is no registration path here, because a number cannot be verified for
+      // free and an account built on an unproven one would mean nothing.
+      return res.status(404).json({ error: 'No account found for this mobile number' });
+    }
+
     full_name = req.body.full_name ? v.name(req.body.full_name) : null;
-    if (!full_name) {
+    new_phone = req.body.phone_no ? v.phone(req.body.phone_no) : null;
+
+    if (!full_name || !new_phone) {
       return res.status(404).json({
-        error: 'This number has no account yet. Send your name to create one.',
+        error: 'This email address has no account yet. Send your name and mobile number to create one.',
         needs_registration: true,
+        // Naming what is missing lets the screen ask for exactly that.
+        missing: [...(full_name ? [] : ['full_name']), ...(new_phone ? [] : ['phone_no'])],
+      });
+    }
+
+    // The crew ring this number when they cannot find the patient, so it has
+    // to belong to somebody - even though nothing here proves it does.
+    if (findUserByPhone(new_phone)) {
+      return res.status(409).json({
+        error: 'That mobile number is already registered to another account',
+        field: 'phone_no',
       });
     }
 
@@ -217,53 +293,72 @@ router.post('/otp/verify', otpVerifyLimiter, asyncRoute(async (req, res) => {
     const now = nowIso();
     const user_id = nextId('user');
 
-    // If the code travelled by email, that address is now a proven one: the
-    // person reading this request received it there. Keep it even when the
-    // client did not resend it, rather than registering an account with no
-    // email and asking for it again later.
-    const email_id = v.email(req.body.email_id)
-      || (row.channel === 'EMAIL' ? row.destination : null);
-
     db.prepare(
-      `INSERT INTO users (user_id, full_name, phone_no, email_id, password_hash, role_code,
-                          verification_status, registration_date, created_at, updated_at)
-       VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`
+      `INSERT INTO users (user_id, full_name, phone_no, email_id, email_verified, phone_verified,
+                          password_hash, role_code, verification_status, registration_date,
+                          created_at, updated_at)
+       VALUES (?, ?, ?, ?, 1, 0, NULL, ?, ?, ?, ?, ?)`
     ).run(
-      user_id, full_name, phone_no, email_id, role_code,
+      user_id, full_name, new_phone, identifier, role_code,
       role_code === 'USER' ? 'VERIFIED' : 'PENDING',
       now.slice(0, 10), now, now
     );
 
     audit('USER_REGISTERED', {
       actorUserId: user_id, actorRole: role_code, entityType: 'user', entityId: user_id,
-      details: { phone_no, role_code, via: 'otp', channel: row.channel || 'WHATSAPP' },
+      details: { email_id: identifier, role_code, via: 'otp', channel: row.channel },
     });
 
-    user = findUserByPhone(phone_no);
+    user = findUserByEmail(identifier);
     return res.status(201).json({ message: 'Account created', ...sessionResponse(user) });
   }
+
+  // An existing account: the code proves whichever detail it was issued
+  // against, and only that one.
+  db.prepare(
+    `UPDATE users SET ${verifyingEmail ? 'email_verified' : 'phone_verified'} = 1, updated_at = ?
+     WHERE user_id = ?`
+  ).run(nowIso(), user.user_id);
 
   if (user.verification_status === 'PENDING' && user.role_code === 'USER') {
     db.prepare('UPDATE users SET verification_status = ?, updated_at = ? WHERE user_id = ?')
       .run('VERIFIED', nowIso(), user.user_id);
   }
 
-  audit('OTP_VERIFIED', { actorUserId: user.user_id, entityType: 'user', entityId: user.user_id });
-  res.json({ message: 'Verified', ...sessionResponse(findUserByPhone(phone_no)) });
+  audit('OTP_VERIFIED', {
+    actorUserId: user.user_id, entityType: 'user', entityId: user.user_id,
+    details: { verified: row.identifier_type },
+  });
+  res.json({
+    message: verifyingEmail ? 'Email verified' : 'Mobile number verified',
+    verified: row.identifier_type,
+    ...sessionResponse(db.prepare('SELECT * FROM users WHERE user_id = ?').get(user.user_id)),
+  });
 }));
 
 // --------------------------------------- 0.1.2 + 0.1.3 login, session, role
 router.post('/login', loginLimiter, asyncRoute(async (req, res) => {
-  const phone_no = v.phone(req.body.phone_no);
+  // Either identifier signs in. An account registered by email knows its
+  // address, not necessarily its own number as typed, and seeded accounts
+  // predate addresses entirely - so neither can be the only way in.
+  const email_id = req.body.email_id ? v.email(req.body.email_id) : null;
+  const phone_no = req.body.phone_no ? v.phone(req.body.phone_no) : null;
+  if (!email_id && !phone_no) {
+    return res.status(400).json({ error: 'Send an email address or a mobile number', field: 'email_id' });
+  }
   const password = v.password(req.body.password);
   const expectedRole = req.body.role_code
     ? v.oneOf(req.body.role_code, v.ROLE_CODES, 'role_code')
     : null;
 
-  const user = findUserByPhone(phone_no);
+  const user = email_id ? findUserByEmail(email_id) : findUserByPhone(phone_no);
   if (!user || !user.password_hash || !bcrypt.compareSync(password, user.password_hash)) {
-    audit('LOGIN_FAILED', { entityType: 'phone', entityId: phone_no });
-    return res.status(401).json({ error: 'Incorrect mobile number or password' });
+    // The same message either way: saying which half was wrong tells an
+    // attacker which addresses and numbers have accounts (NF.3).
+    audit('LOGIN_FAILED', { entityType: email_id ? 'email' : 'phone', entityId: email_id || phone_no });
+    return res.status(401).json({
+      error: email_id ? 'Incorrect email address or password' : 'Incorrect mobile number or password',
+    });
   }
   if (user.verification_status === 'SUSPENDED') {
     return res.status(403).json({ error: 'This account has been suspended by an administrator' });
@@ -317,6 +412,8 @@ router.get('/me', authenticate, (req, res) => {
       full_name: req.user.full_name,
       phone_no: req.user.phone_no,
       email_id: req.user.email_id,
+      email_verified: Boolean(req.user.email_verified),
+      phone_verified: Boolean(req.user.phone_verified),
       role_code: req.user.role_code,
       verification_status: req.user.verification_status,
       registration_date: req.user.registration_date,

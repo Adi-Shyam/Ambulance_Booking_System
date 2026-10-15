@@ -35,10 +35,16 @@ function createUser({ full_name, phone_no, email_id, role_code, password, verifi
   const now = nowIso();
   const user_id = nextId('user');
   db.prepare(
-    `INSERT INTO users (user_id, full_name, phone_no, email_id, password_hash, role_code,
-                        verification_status, registration_date, org_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(user_id, full_name, phone_no, email_id, bcrypt.hashSync(password, 12), role_code,
+    `INSERT INTO users (user_id, full_name, phone_no, email_id, email_verified, phone_verified,
+                        password_hash, role_code, verification_status, registration_date,
+                        org_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(user_id, full_name, phone_no, email_id,
+        // Reference data, so an address that is seeded counts as proved and
+        // the demo accounts can sign in by email. No seeded number is proved:
+        // nothing here checked one, and the flag says so.
+        email_id ? 1 : 0,
+        bcrypt.hashSync(password, 12), role_code,
         verification_status, now.slice(0, 10), org_id, now, now);
   return user_id;
 }
@@ -95,17 +101,17 @@ function seed() {
 
   // ---- drivers / ambulances ----
   const driverSpecs = [
-    { name: 'Ramesh Kumar', phone: '9700000001', reg: 'KA19AB1234', type: 'BLS', status: 'AVAILABLE', verify: 'VERIFIED', org: org_id, rating: [23, 5] },
-    { name: 'Suresh Naik', phone: '9700000002', reg: 'KA19CD5678', type: 'ALS', status: 'AVAILABLE', verify: 'VERIFIED', org: org_id, rating: [18, 4] },
-    { name: 'Fatima Sheikh', phone: '9700000003', reg: 'KA20EF9012', type: 'ICU', status: 'AVAILABLE', verify: 'VERIFIED', org: null, rating: [29, 6] },
-    { name: 'Anil Shetty', phone: '9700000004', reg: 'KA19GH3456', type: 'PTV', status: 'AVAILABLE', verify: 'VERIFIED', org: null, rating: [12, 3] },
-    { name: 'Joseph DSouza', phone: '9700000005', reg: 'KA21IJ7890', type: 'BLS', status: 'OFFLINE', verify: 'VERIFIED', org: org_id, rating: [8, 2] },
-    { name: 'Priya Rao', phone: '9700000006', reg: 'KA19KL2345', type: 'ALS', status: 'OFFLINE', verify: 'PENDING', org: null, rating: [0, 0] },
+    { name: 'Ramesh Kumar', email: 'ramesh@example.in', phone: '9700000001', reg: 'KA19AB1234', type: 'BLS', status: 'AVAILABLE', verify: 'VERIFIED', org: org_id, rating: [23, 5] },
+    { name: 'Suresh Naik', email: 'suresh@example.in', phone: '9700000002', reg: 'KA19CD5678', type: 'ALS', status: 'AVAILABLE', verify: 'VERIFIED', org: org_id, rating: [18, 4] },
+    { name: 'Fatima Sheikh', email: 'fatima@example.in', phone: '9700000003', reg: 'KA20EF9012', type: 'ICU', status: 'AVAILABLE', verify: 'VERIFIED', org: null, rating: [29, 6] },
+    { name: 'Anil Shetty', email: 'anil@example.in', phone: '9700000004', reg: 'KA19GH3456', type: 'PTV', status: 'AVAILABLE', verify: 'VERIFIED', org: null, rating: [12, 3] },
+    { name: 'Joseph DSouza', email: 'joseph@example.in', phone: '9700000005', reg: 'KA21IJ7890', type: 'BLS', status: 'OFFLINE', verify: 'VERIFIED', org: org_id, rating: [8, 2] },
+    { name: 'Priya Rao', email: 'priya@example.in', phone: '9700000006', reg: 'KA19KL2345', type: 'ALS', status: 'OFFLINE', verify: 'PENDING', org: null, rating: [0, 0] },
   ];
 
   const providers = driverSpecs.map((d, i) => {
     const user_id = createUser({
-      full_name: d.name, phone_no: d.phone, email_id: null,
+      full_name: d.name, phone_no: d.phone, email_id: d.email,
       role_code: d.org ? 'ORG' : 'DRIVER', password: 'driver123',
       verification_status: d.verify, org_id: d.org,
     });

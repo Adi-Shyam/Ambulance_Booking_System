@@ -44,8 +44,10 @@ const tokensFor = (userId) =>
 
 /** Logs the attempt beside every other channel, so the alert log stays one list. */
 function record({ userId, body, title, bookingId, deliveryState, providerResponse, tokenCount }) {
-  const phone = db.prepare('SELECT phone_no FROM users WHERE user_id = ?').get(userId)?.phone_no;
-  if (!phone) return null;
+  // `recipient_phone` is nullable, so an account without a number still gets a
+  // row. Dropping the row instead would hide a sent alert from the control
+  // room's log, which is the one place that is meant to show everything.
+  const phone = db.prepare('SELECT phone_no FROM users WHERE user_id = ?').get(userId)?.phone_no || null;
   const id = messageId();
   db.prepare(
     `INSERT INTO messages (message_id, booking_id, recipient_phone, message_channel,

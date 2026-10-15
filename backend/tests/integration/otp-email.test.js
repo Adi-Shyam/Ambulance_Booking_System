@@ -1,10 +1,10 @@
 'use strict';
-// F.1 - a verification code may travel by email instead of WhatsApp.
+// F.1 - the mechanics of getting a code to someone.
 //
-// Email is a delivery channel, not an identity: `phone_no` stays the account
-// identifier because the data dictionary makes it NOT NULL UNIQUE and a driver
-// who cannot find the patient has to be able to ring them. These cases pin
-// that distinction down - every account below is still keyed by its number.
+// A code proves control of one contact detail, so a request names the detail:
+// `email_id` to prove an address, `phone_no` to prove a number. Registration
+// uses the address, because an address can be proved for nothing while proving
+// a number needs an SMS gateway or an unblocked WhatsApp sender.
 //
 // Email also matters practically: it is the one channel with no 24-hour
 // customer service window, no template approval and no billing relationship,
@@ -18,112 +18,141 @@ const { startTestServer, stopTestServer, post, ACCOUNTS } = require('../helpers'
 // the server's own, through the module cache - to the real database.
 const database = () => require('../../src/db').db;
 
-// A distinct number per case: NF.3 caps code requests per number, and sharing
-// one between tests spends that allowance and fails the later ones.
-const BY_EMAIL = '9822200011';
-const NO_ADDRESS = '9822200022';
-const BAD_CHANNEL = '9822200033';
-const DEFAULT_CHANNEL = '9822200044';
+const BY_EMAIL = 'channel.test@example.in';
+const NO_ACCOUNT = '9822200022';
+const BAD_CHANNEL = 'bad.channel@example.in';
 
-const lastMessageTo = (phone) =>
+const lastMessageTo = (email) =>
   database().prepare(
-    `SELECT message_channel, recipient_email, body FROM messages
-     WHERE recipient_phone = ? ORDER BY rowid DESC LIMIT 1`
-  ).get(phone);
+    `SELECT message_channel, recipient_phone, recipient_email, body FROM messages
+     WHERE recipient_email = ? ORDER BY rowid DESC LIMIT 1`
+  ).get(email);
 
-const codeFor = (phone) =>
+const otpRow = (identifier) =>
   database().prepare(
-    'SELECT otp_code FROM otps WHERE phone_no = ? AND consumed = 0 ORDER BY id DESC LIMIT 1'
-  ).get(phone)?.otp_code;
+    'SELECT * FROM otps WHERE identifier = ? AND consumed = 0 ORDER BY id DESC LIMIT 1'
+  ).get(identifier);
 
 test.before(async () => { await startTestServer(); });
 test.after(async () => { await stopTestServer(); });
 
-test('a code can be sent to an email address instead of WhatsApp', async () => {
+test('a code to an address is logged as an email', async () => {
   const r = await post('/api/auth/otp/request', {
-    phone_no: BY_EMAIL, purpose: 'REGISTER', channel: 'EMAIL', email_id: 'Asha.Rao@Example.In',
+    email_id: 'Channel.Test@Example.In', purpose: 'REGISTER',
   });
 
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(r.body.channel, 'EMAIL');
+  assert.equal(r.body.verifying, 'EMAIL', 'the reply says which detail is being proved');
 
   const sent = lastMessageTo(BY_EMAIL);
   assert.equal(sent.message_channel, 'EMAIL', 'the delivery log records the channel used');
-  assert.equal(sent.recipient_email, 'asha.rao@example.in', 'and normalises the address');
+  assert.equal(sent.recipient_email, BY_EMAIL, 'and normalises the address');
+  assert.equal(
+    sent.recipient_phone, null,
+    'there is no account yet, so there is no number to attribute it to'
+  );
   assert.match(sent.body, /verification code/i);
 });
 
 test('the response masks where the code went', async () => {
-  const r = await post('/api/auth/otp/request', {
-    phone_no: BY_EMAIL, purpose: 'REGISTER', channel: 'EMAIL', email_id: 'asha.rao@example.in',
-  });
+  const r = await post('/api/auth/otp/request', { email_id: BY_EMAIL, purpose: 'REGISTER' });
 
-  assert.equal(r.body.sent_to, 'a******o@example.in');
+  assert.equal(r.body.sent_to, 'c**********t@example.in');
   assert.ok(
-    !r.body.sent_to.includes('asha.rao'),
+    !r.body.sent_to.includes('channel.test'),
     'asking for a code must not read the address back out in full'
   );
 });
 
-test('verifying an emailed code registers the account and keeps the address', async () => {
-  const r = await post('/api/auth/otp/verify', {
-    phone_no: BY_EMAIL, otp_code: codeFor(BY_EMAIL), full_name: 'Asha Rao',
-  });
+test('the row records what is being proved and how it travelled', async () => {
+  await post('/api/auth/otp/request', { email_id: BY_EMAIL, purpose: 'REGISTER' });
+  const row = otpRow(BY_EMAIL);
 
-  assert.equal(r.status, 201, JSON.stringify(r.body));
-  assert.equal(r.body.user.phone_no, BY_EMAIL, 'the phone number is still the identifier');
-  assert.equal(
-    r.body.user.email_id, 'asha.rao@example.in',
-    'an address that received a code is a proven one, so it is kept without being resent'
-  );
+  assert.equal(row.identifier, BY_EMAIL);
+  assert.equal(row.identifier_type, 'EMAIL');
+  assert.equal(row.channel, 'EMAIL');
+  assert.equal(row.destination, BY_EMAIL);
 });
 
-test('an existing account needs no address: the one on file is used', async () => {
+// The remaining phone-keyed path: an account that already exists proving its
+// number. There is no registration here - an account built on a number nothing
+// has checked would mean nothing.
+test('an existing account can be sent a code to prove its number', async () => {
   const r = await post('/api/auth/otp/request', {
-    phone_no: ACCOUNTS.patient.phone, channel: 'EMAIL',
+    phone_no: ACCOUNTS.patient.phone, channel: 'WHATSAPP',
   });
 
   assert.equal(r.status, 200, JSON.stringify(r.body));
-  assert.equal(lastMessageTo(ACCOUNTS.patient.phone).recipient_email, 'adithya@example.in');
+  assert.equal(r.body.verifying, 'PHONE');
+  assert.equal(otpRow(ACCOUNTS.patient.phone).identifier_type, 'PHONE');
 });
 
-test('an email channel with nowhere to send says so rather than failing silently', async () => {
+test('proving a number by email uses the address already on that account', async () => {
   const r = await post('/api/auth/otp/request', {
-    phone_no: NO_ADDRESS, purpose: 'REGISTER', channel: 'EMAIL',
+    phone_no: ACCOUNTS.patient2.phone, channel: 'EMAIL',
   });
 
-  assert.equal(r.status, 400);
-  assert.equal(r.body.field, 'email_id', 'the client is told which field is missing');
-  assert.equal(codeFor(NO_ADDRESS), undefined, 'and no code was issued for a code nobody could read');
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.verifying, 'PHONE', 'the number is what is being proved');
+  assert.equal(r.body.channel, 'EMAIL', 'the address is only how the code travels');
+  assert.equal(lastMessageTo('dev@example.in').recipient_email, 'dev@example.in');
 });
 
-test('a driver with no address on file is told to use WhatsApp', async () => {
-  const r = await post('/api/auth/otp/request', {
-    phone_no: ACCOUNTS.driverICU.phone, channel: 'EMAIL',
+test('verifying a number marks the number, not the address', async () => {
+  await post('/api/auth/otp/request', { phone_no: ACCOUNTS.patient.phone, channel: 'WHATSAPP' });
+  const r = await post('/api/auth/otp/verify', {
+    phone_no: ACCOUNTS.patient.phone,
+    otp_code: otpRow(ACCOUNTS.patient.phone).otp_code,
   });
 
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.verified, 'PHONE');
+  assert.equal(r.body.user.phone_verified, true);
+});
+
+test('a code for a number nobody holds is not a registration', async () => {
+  const requested = await post('/api/auth/otp/request', {
+    phone_no: NO_ACCOUNT, purpose: 'REGISTER',
+  });
+  assert.equal(requested.status, 200, 'a code can be issued');
+
+  const r = await post('/api/auth/otp/verify', {
+    phone_no: NO_ACCOUNT,
+    otp_code: otpRow(NO_ACCOUNT).otp_code,
+    full_name: 'Someone New',
+  });
+
+  assert.equal(r.status, 404, 'but it cannot create an account');
+  assert.notEqual(
+    r.body.needs_registration, true,
+    'and must not invite one, since nothing here proves the number belongs to them'
+  );
+});
+
+test('a request naming neither an address nor a number is refused', async () => {
+  const r = await post('/api/auth/otp/request', { purpose: 'REGISTER' });
   assert.equal(r.status, 400);
-  assert.match(r.body.error, /no email address on file/i);
+  assert.equal(r.body.field, 'email_id');
 });
 
 test('an unrecognised channel is refused', async () => {
   const r = await post('/api/auth/otp/request', {
-    phone_no: BAD_CHANNEL, purpose: 'REGISTER', channel: 'CARRIER_PIGEON',
+    phone_no: '9822200033', purpose: 'REGISTER', channel: 'CARRIER_PIGEON',
   });
 
   assert.equal(r.status, 400);
   assert.equal(r.body.field, 'channel');
 });
 
-test('omitting the channel still sends by the phone, unchanged', async () => {
+test('an address can only ever be reached by email', async () => {
   const r = await post('/api/auth/otp/request', {
-    phone_no: DEFAULT_CHANNEL, purpose: 'REGISTER',
+    email_id: BAD_CHANNEL, purpose: 'REGISTER', channel: 'WHATSAPP',
   });
 
   assert.equal(r.status, 200);
-  assert.equal(r.body.channel, 'WHATSAPP', 'the default is the behaviour that existed before');
-  assert.notEqual(
-    lastMessageTo(DEFAULT_CHANNEL).message_channel, 'EMAIL',
-    'adding a channel must not silently redirect the existing one'
+  assert.equal(
+    r.body.channel, 'EMAIL',
+    'asking for WhatsApp to an email address is a mistake to correct, not to honour'
   );
 });

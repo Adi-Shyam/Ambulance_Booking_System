@@ -100,9 +100,19 @@ export function AuthProvider({ children }) {
        * and verified here where it cannot (the provider console covers two role
        * codes, and /api/auth/login only accepts one).
        */
-      async signIn(roleKey, phone_no, password) {
+      /**
+       * `identifier` is an email address or a mobile number. An account made
+       * by verifying an address knows that address; it may not remember which
+       * number it typed at sign-up, so either has to work.
+       */
+      async signIn(roleKey, identifier, password) {
         const role = roleFor(roleKey);
-        const body = { phone_no, password };
+        const body = {
+          ...(String(identifier).includes('@')
+            ? { email_id: identifier }
+            : { phone_no: identifier }),
+          password,
+        };
         if (role?.roleCode) body.role_code = role.roleCode;
         return adopt(await api.post('/api/auth/login', body), roleKey);
       },
@@ -112,21 +122,37 @@ export function AuthProvider({ children }) {
       },
 
       /**
-       * `options.channel` is 'WHATSAPP' (the default) or 'EMAIL'. The number is
-       * sent either way, because it identifies the account; email only decides
-       * where the code is delivered.
+       * Asks for a code against one contact detail. `identifier` is an email
+       * address or a mobile number; the server works out which from the shape
+       * it arrives in, so the screen does not have to.
+       *
+       * REGISTER rather than the LOGIN default, because this one screen serves
+       * both signing in and signing up, and LOGIN refuses an address it does
+       * not know.
        */
-      requestOtp: (phone_no, options = {}) =>
-        api.post('/api/auth/otp/request', { phone_no, purpose: 'REGISTER', ...options }),
+      requestOtp: (identifier, options = {}) =>
+        api.post('/api/auth/otp/request', {
+          ...(String(identifier).includes('@')
+            ? { email_id: identifier }
+            : { phone_no: identifier }),
+          purpose: 'REGISTER',
+          ...options,
+        }),
 
       /**
        * A correct code on an unknown number registers it (F.1). The server
        * asks for a name when it needs one rather than failing, so `details`
        * carries whatever the screen has collected.
        */
-      async verifyOtp(roleKey, phone_no, otp_code, details = {}) {
+      async verifyOtp(roleKey, identifier, otp_code, details = {}) {
         const role = roleFor(roleKey);
-        const body = { phone_no, otp_code, ...details };
+        const body = {
+          ...(String(identifier).includes('@')
+            ? { email_id: identifier }
+            : { phone_no: identifier }),
+          otp_code,
+          ...details,
+        };
         // The provider console covers two role codes; default new accounts
         // there to DRIVER, which the person can turn into an organisation when
         // they add their vehicle.

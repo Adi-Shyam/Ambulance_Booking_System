@@ -15,9 +15,15 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const db = new DatabaseSync(DB_FILE);
 
 function migrate() {
-  const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-  db.exec(schema);
+  // Order matters. Table rebuilds come first because schema.sql declares
+  // indexes over the new shape - an index on `otps(identifier)` cannot be
+  // created while the table still has the old `phone_no` column, and
+  // CREATE TABLE IF NOT EXISTS would have left that table untouched. Each
+  // rebuild reads its DDL from schema.sql, not from the database, so running
+  // them before the replay is safe; on a fresh database they find no tables
+  // and do nothing.
   widenCheckConstraints();
+  db.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
   addMissingColumns();
   seedFareRules();
 }
@@ -26,6 +32,8 @@ function migrate() {
 // added after a database was first created have to be applied separately.
 // Each entry is idempotent: it runs only when the column is absent.
 const COLUMN_ADDITIONS = [
+  ['users', 'email_verified', 'INTEGER NOT NULL DEFAULT 0'],
+  ['users', 'phone_verified', 'INTEGER NOT NULL DEFAULT 0'],
   ['trips', 'distance_travelled_km', 'REAL NOT NULL DEFAULT 0'],
   ['trips', 'laden_distance_km', 'REAL NOT NULL DEFAULT 0'],
   ['bookings', 'stall_flagged_at', 'TEXT'],
@@ -46,6 +54,26 @@ const COLUMN_ADDITIONS = [
 // `otps.channel` is not here: adding a column *with* a CHECK is allowed, so
 // COLUMN_ADDITIONS handles that one.
 function widenCheckConstraints() {
+  // `otps.phone_no` became `identifier`: a code proves control of one contact
+  // detail, and since registration now verifies an email address, the row can
+  // no longer be keyed on a phone number it may not have. Rows already in the
+  // table were all phone codes, so they carry over as identifier_type 'PHONE'.
+  rebuildTable({
+    table: 'otps',
+    needsRebuild: (ddl) => !ddl.includes('identifier'),
+    createSql: ddlFromSchema('otps', 'otps_migrated'),
+    indexes: ['CREATE INDEX IF NOT EXISTS idx_otps_identifier ON otps(identifier, consumed)'],
+    carry: { identifier: 'phone_no', identifier_type: "'PHONE'" },
+  });
+
+  // email_id gained UNIQUE when an address became something you sign in with.
+  rebuildTable({
+    table: 'users',
+    needsRebuild: (ddl) => !/email_id\s+TEXT UNIQUE/.test(ddl),
+    createSql: ddlFromSchema('users', 'users_migrated'),
+    indexes: ['CREATE INDEX IF NOT EXISTS idx_users_role ON users(role_code)'],
+  });
+
   // EMG joined the request types when emergency dispatch arrived. It is a
   // request, not a vehicle class, so `providers.ambulance_type` is untouched:
   // an emergency is served by whatever is nearest, whatever it is.
@@ -69,7 +97,8 @@ function widenCheckConstraints() {
   // channel (F.1). Databases created before that reject the insert outright.
   rebuildTable({
     table: 'messages',
-    needsRebuild: (ddl) => !ddl.includes("'EMAIL'"),
+    needsRebuild: (ddl) =>
+      !ddl.includes("'EMAIL'") || /recipient_phone\s+TEXT NOT NULL/.test(ddl),
     createSql: ddlFromSchema('messages', 'messages_migrated'),
     indexes: ['CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC)'],
   });
@@ -116,7 +145,7 @@ function ddlFromSchema(table, newName) {
  * have orphaned a row rolls back with the old table still in place rather than
  * leaving the database half-migrated.
  */
-function rebuildTable({ table, needsRebuild, createSql, indexes = [] }) {
+function rebuildTable({ table, needsRebuild, createSql, indexes = [], carry = {} }) {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
   if (!row || !needsRebuild(row.sql)) return;
 
@@ -136,9 +165,15 @@ function rebuildTable({ table, needsRebuild, createSql, indexes = [] }) {
     const newCols = db.prepare(`PRAGMA table_info(${table}_migrated)`).all().map((c) => c.name);
     const shared = oldCols.filter((c) => newCols.includes(c));
 
+    // `carry` fills a column the old shape does not have under that name -
+    // a rename, or a constant for rows that predate the distinction. Without
+    // it a renamed NOT NULL column would fail the copy.
+    const targets = [...shared, ...Object.keys(carry).filter((c) => newCols.includes(c) && !shared.includes(c))];
+    const sources = targets.map((c) => (shared.includes(c) ? c : carry[c]));
+
     db.exec(
-      `INSERT INTO ${table}_migrated (${shared.join(', ')})
-       SELECT ${shared.join(', ')} FROM ${table}`
+      `INSERT INTO ${table}_migrated (${targets.join(', ')})
+       SELECT ${sources.join(', ')} FROM ${table}`
     );
     db.exec(`DROP TABLE ${table}`);
     db.exec(`ALTER TABLE ${table}_migrated RENAME TO ${table}`);

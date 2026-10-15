@@ -66,7 +66,8 @@ describe('signing in writes to D1 (DFD 0.1.3)', () => {
 
   test('registration and OTP sign-in also create sessions', async () => {
     const registered = await post('/api/auth/register', {
-      full_name: 'Session Test User', phone_no: '9765432100', password: 'secret123',
+      full_name: 'Session Test User', phone_no: '9765432100',
+      email_id: 'session.test@example.in', password: 'secret123',
     });
     assert.equal(registered.status, 201);
     assert.equal(sessionsFor(registered.body.user.user_id).length, 1, 'registration signs the user in');

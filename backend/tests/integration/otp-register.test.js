@@ -1,76 +1,122 @@
 'use strict';
-// F.1 - registering by OTP. A correct code on a number with no account is a
-// new user, not a dead end. The schema allows a NULL password_hash for exactly
-// these accounts: they sign in by code rather than holding a password they
-// never chose.
+// F.1 - registering by email.
+//
+// An account is created by proving an email address, because an address can be
+// proved for nothing. A mobile number is collected at the same time and is
+// *not* proved: doing so needs an SMS gateway or an unblocked WhatsApp sender,
+// so the account records honestly which of the two has actually been checked.
+//
+// The schema allows a NULL password_hash for accounts made this way: they sign
+// in by code rather than holding a password they never chose.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { startTestServer, stopTestServer, get, post } = require('../helpers');
+const { startTestServer, stopTestServer, post } = require('../helpers');
 // Required lazily: src/db resolves DB_FILE at load time, so touching it
 // before startTestServer sets that variable would bind every query - and
 // the server's own, through the module cache - to the real database.
 const database = () => require('../../src/db').db;
 
-// Numbers the seed does not use, so each test starts genuinely unknown.
-const NEW_PATIENT = '9811122233';
-const NEW_DRIVER = '9811122244';
-const WOULD_BE_ADMIN = '9811122255';
-const NEW_BY_CODE = '9811122266';
+// Addresses and numbers the seed does not use, so each case starts genuinely
+// unknown. One per test: NF.3 caps code requests per identifier, and sharing
+// one spends that allowance on the later cases.
+const NEW_PATIENT = { email: 'asha.rao@example.in', phone: '9811122233' };
+const NEW_DRIVER = { email: 'ravi.kumar@example.in', phone: '9811122244' };
+const WOULD_BE_ADMIN = { email: 'not.an.admin@example.in', phone: '9811122255' };
+const NEW_BY_CODE = { email: 'meera.nair@example.in', phone: '9811122266' };
+const ROUND_TRIP = { email: 'second.attempt@example.in', phone: '9811122277' };
+const TAKEN_NUMBER = { email: 'different.person@example.in', phone: '9811122233' };
 
-const codeFor = (phone) =>
-  database().prepare('SELECT otp_code FROM otps WHERE phone_no = ? AND consumed = 0 ORDER BY id DESC LIMIT 1')
-    .get(phone)?.otp_code;
+const codeFor = (identifier) =>
+  database().prepare(
+    'SELECT otp_code FROM otps WHERE identifier = ? AND consumed = 0 ORDER BY id DESC LIMIT 1'
+  ).get(identifier)?.otp_code;
+
+const requestCode = (email) =>
+  post('/api/auth/otp/request', { email_id: email, purpose: 'REGISTER' });
 
 test.before(async () => { await startTestServer(); });
 test.after(async () => { await stopTestServer(); });
 
 // The sign-in screen has one OTP tab serving both "sign me in" and "I am new
-// here", so it has to ask for REGISTER. It used to send no purpose at all,
-// which defaults to LOGIN - and LOGIN refuses a number it does not know, so
-// registration by code was reachable from the API and never from the app.
-test('a code for an unknown number needs purpose REGISTER, not the LOGIN default', async () => {
-  const asLogin = await post('/api/auth/otp/request', { phone_no: '9833399911' });
+// here", so it has to ask for REGISTER. LOGIN refuses an address it does not
+// know, which is right for a sign-in but a dead end for a sign-up.
+test('a code for an unknown address needs purpose REGISTER, not the LOGIN default', async () => {
+  const asLogin = await post('/api/auth/otp/request', { email_id: 'nobody@example.in' });
   assert.equal(asLogin.status, 404, 'LOGIN is for accounts that exist, and says so early');
 
-  const asRegister = await post('/api/auth/otp/request', { phone_no: '9833399911', purpose: 'REGISTER' });
-  assert.equal(asRegister.status, 200, 'REGISTER is how a new number gets a code at all');
+  const asRegister = await requestCode('nobody@example.in');
+  assert.equal(asRegister.status, 200, 'REGISTER is how a new address gets a code at all');
 });
 
-test('a correct code on an unknown number asks for a name rather than failing', async () => {
-  await post('/api/auth/otp/request', { phone_no: NEW_PATIENT, purpose: 'REGISTER' });
-  const r = await post('/api/auth/otp/verify', { phone_no: NEW_PATIENT, otp_code: codeFor(NEW_PATIENT) });
+test('a correct code on an unknown address asks for what is missing', async () => {
+  await requestCode(NEW_PATIENT.email);
+  const r = await post('/api/auth/otp/verify', {
+    email_id: NEW_PATIENT.email, otp_code: codeFor(NEW_PATIENT.email),
+  });
 
   assert.equal(r.status, 404);
   assert.equal(r.body.needs_registration, true, 'the client is told what is missing, not just refused');
+  assert.deepEqual(
+    r.body.missing.sort(), ['full_name', 'phone_no'],
+    'and which fields, so the screen can ask for exactly those'
+  );
 });
 
-test('supplying a name creates the account and returns a session', async () => {
-  await post('/api/auth/otp/request', { phone_no: NEW_PATIENT, purpose: 'REGISTER' });
+test('a name and a number create the account and return a session', async () => {
+  await requestCode(NEW_PATIENT.email);
   const r = await post('/api/auth/otp/verify', {
-    phone_no: NEW_PATIENT, otp_code: codeFor(NEW_PATIENT), full_name: 'Asha Rao',
+    email_id: NEW_PATIENT.email,
+    otp_code: codeFor(NEW_PATIENT.email),
+    full_name: 'Asha Rao',
+    phone_no: NEW_PATIENT.phone,
   });
 
-  assert.equal(r.status, 201);
+  assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.ok(r.body.session_token, 'signed in straight away');
-  assert.equal(r.body.user.role_code, 'USER');
+  assert.equal(r.body.user.email_id, NEW_PATIENT.email);
+  assert.equal(r.body.user.phone_no, NEW_PATIENT.phone);
   assert.equal(r.body.user.verification_status, 'VERIFIED', 'patients are usable at once');
 
-  const row = database().prepare('SELECT password_hash FROM users WHERE phone_no = ?').get(NEW_PATIENT);
+  const row = database()
+    .prepare('SELECT password_hash, email_verified, phone_verified FROM users WHERE email_id = ?')
+    .get(NEW_PATIENT.email);
+
   assert.equal(row.password_hash, null, 'no password was invented for them');
+  assert.equal(row.email_verified, 1, 'the address answered a code, so it is proved');
+  assert.equal(
+    row.phone_verified, 0,
+    'nothing here checked the number, and the record must not imply otherwise'
+  );
+});
+
+test('the client is told which contacts are proved', async () => {
+  const r = await post('/api/auth/otp/request', { email_id: NEW_PATIENT.email });
+  assert.equal(r.status, 200, 'the address is now known, so LOGIN works');
+
+  const session = await post('/api/auth/otp/verify', {
+    email_id: NEW_PATIENT.email, otp_code: codeFor(NEW_PATIENT.email),
+  });
+
+  assert.equal(session.status, 200);
+  assert.equal(session.body.user.email_verified, true);
+  assert.equal(session.body.user.phone_verified, false);
 });
 
 test('an OTP-only account cannot be signed into with a password', async () => {
-  const r = await post('/api/auth/login', { phone_no: NEW_PATIENT, password: 'anything-at-all' });
+  const r = await post('/api/auth/login', {
+    email_id: NEW_PATIENT.email, password: 'anything-at-all',
+  });
   assert.equal(r.status, 401, 'a NULL hash must never match');
 });
 
 test('an OTP-only account can set a first password without knowing one', async () => {
-  // Its own number, because NF.3 caps code requests per number and the cases
-  // above have already spent that allowance on NEW_PATIENT.
-  await post('/api/auth/otp/request', { phone_no: NEW_BY_CODE, purpose: 'REGISTER' });
+  await requestCode(NEW_BY_CODE.email);
   const session = await post('/api/auth/otp/verify', {
-    phone_no: NEW_BY_CODE, otp_code: codeFor(NEW_BY_CODE), full_name: 'Meera Nair',
+    email_id: NEW_BY_CODE.email,
+    otp_code: codeFor(NEW_BY_CODE.email),
+    full_name: 'Meera Nair',
+    phone_no: NEW_BY_CODE.phone,
   });
   const token = session.body.session_token;
   assert.ok(token, `registration did not return a session: ${JSON.stringify(session.body)}`);
@@ -79,55 +125,88 @@ test('an OTP-only account can set a first password without knowing one', async (
   assert.equal(set.status, 200, JSON.stringify(set.body));
   assert.equal(set.body.first_password, true, 'no current password was demanded');
 
-  const login = await post('/api/auth/login', { phone_no: NEW_BY_CODE, password: 'chosen-later' });
-  assert.equal(login.status, 200, 'and that password then works');
+  const byEmail = await post('/api/auth/login', {
+    email_id: NEW_BY_CODE.email, password: 'chosen-later',
+  });
+  assert.equal(byEmail.status, 200, 'and that password then works with the address');
+
+  const byPhone = await post('/api/auth/login', {
+    phone_no: NEW_BY_CODE.phone, password: 'chosen-later',
+  });
+  assert.equal(byPhone.status, 200, 'or with the number, which is still an identifier');
 });
 
-// The exact sequence the sign-in screen performs: one code, verified twice -
-// first without a name, which asks for one, then with it. Consuming the code
-// on that first reply made the second fail with "Incorrect verification code",
-// so no account could ever be created from the app. Every other case here
-// requests a fresh code before verifying, which is why none of them caught it.
-test('one code survives the round trip that asks for a name', async () => {
-  const PHONE = '9811122277';
-  await post('/api/auth/otp/request', { phone_no: PHONE, purpose: 'REGISTER' });
-  const code = codeFor(PHONE);
+// The screen asks twice: once with the code, and again with the details the
+// first reply asked for. Consuming the code on that first reply would leave the
+// second with nothing to present, so registering from the app would be
+// impossible however correct the code was.
+test('one code survives the round trip that asks for more', async () => {
+  await requestCode(ROUND_TRIP.email);
+  const code = codeFor(ROUND_TRIP.email);
 
-  const asked = await post('/api/auth/otp/verify', { phone_no: PHONE, otp_code: code });
+  const asked = await post('/api/auth/otp/verify', { email_id: ROUND_TRIP.email, otp_code: code });
   assert.equal(asked.status, 404);
   assert.equal(asked.body.needs_registration, true);
 
   const done = await post('/api/auth/otp/verify', {
-    phone_no: PHONE, otp_code: code, full_name: 'Second Attempt',
+    email_id: ROUND_TRIP.email, otp_code: code,
+    full_name: 'Second Attempt', phone_no: ROUND_TRIP.phone,
   });
   assert.equal(done.status, 201, `the same code had to still work: ${JSON.stringify(done.body)}`);
 
   // And only once - it is spent now.
-  const replay = await post('/api/auth/otp/verify', { phone_no: PHONE, otp_code: code });
+  const replay = await post('/api/auth/otp/verify', { email_id: ROUND_TRIP.email, otp_code: code });
   assert.equal(replay.status, 401, 'a consumed code cannot be replayed');
 });
 
-test('a provider registered by OTP still starts PENDING', async () => {
-  await post('/api/auth/otp/request', { phone_no: NEW_DRIVER, purpose: 'REGISTER' });
+test('a number already registered to someone else is refused', async () => {
+  await requestCode(TAKEN_NUMBER.email);
   const r = await post('/api/auth/otp/verify', {
-    phone_no: NEW_DRIVER, otp_code: codeFor(NEW_DRIVER), full_name: 'Ravi Kumar', role_code: 'DRIVER',
+    email_id: TAKEN_NUMBER.email,
+    otp_code: codeFor(TAKEN_NUMBER.email),
+    full_name: 'Different Person',
+    phone_no: TAKEN_NUMBER.phone,          // already Asha Rao's
+  });
+
+  assert.equal(r.status, 409);
+  assert.equal(r.body.field, 'phone_no');
+  assert.equal(
+    database().prepare('SELECT 1 FROM users WHERE email_id = ?').get(TAKEN_NUMBER.email), undefined,
+    'and no half-made account was left behind'
+  );
+});
+
+test('a provider registered by email still starts PENDING', async () => {
+  await requestCode(NEW_DRIVER.email);
+  const r = await post('/api/auth/otp/verify', {
+    email_id: NEW_DRIVER.email,
+    otp_code: codeFor(NEW_DRIVER.email),
+    full_name: 'Ravi Kumar',
+    phone_no: NEW_DRIVER.phone,
+    role_code: 'DRIVER',
   });
 
   assert.equal(r.status, 201);
   assert.equal(r.body.user.role_code, 'DRIVER');
   assert.equal(
     r.body.user.verification_status, 'PENDING',
-    'holding a phone number does not verify an ambulance (C.6)'
+    'holding an email address does not verify an ambulance (C.6)'
   );
 });
 
-test('nobody can register themselves as an administrator by OTP', async () => {
-  await post('/api/auth/otp/request', { phone_no: WOULD_BE_ADMIN, purpose: 'REGISTER' });
+test('nobody can register themselves as an administrator', async () => {
+  await requestCode(WOULD_BE_ADMIN.email);
   const r = await post('/api/auth/otp/verify', {
-    phone_no: WOULD_BE_ADMIN, otp_code: codeFor(WOULD_BE_ADMIN), full_name: 'Not An Admin', role_code: 'ADMIN',
+    email_id: WOULD_BE_ADMIN.email,
+    otp_code: codeFor(WOULD_BE_ADMIN.email),
+    full_name: 'Not An Admin',
+    phone_no: WOULD_BE_ADMIN.phone,
+    role_code: 'ADMIN',
   });
 
   assert.equal(r.status, 400, 'F.13: control-room accounts are made by another administrator');
-  const created = database().prepare('SELECT 1 FROM users WHERE phone_no = ?').get(WOULD_BE_ADMIN);
-  assert.equal(created, undefined, 'and nothing was written');
+  assert.equal(
+    database().prepare('SELECT 1 FROM users WHERE email_id = ?').get(WOULD_BE_ADMIN.email), undefined,
+    'and nothing was written'
+  );
 });

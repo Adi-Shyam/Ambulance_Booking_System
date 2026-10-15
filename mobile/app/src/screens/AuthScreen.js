@@ -31,13 +31,11 @@ export default function AuthScreen() {
 
   const [roleKey, setRoleKey] = useState(null);
   const [mode, setMode] = useState(MODES.SIGN_IN);
-  const [form, setForm] = useState({ full_name: '', phone_no: '', email_id: '', password: '' });
+  const [form, setForm] = useState({
+    full_name: '', phone_no: '', email_id: '', identity: '', password: '',
+  });
   const [regRole, setRegRole] = useState('USER');
   const [otp, setOtp] = useState({ sent: false, code: '', devCode: '' });
-  // Which way the verification code travels. The account is identified by its
-  // mobile number either way - this chooses the postman, not the identity -
-  // which is why the number field stays required in both cases.
-  const [otpChannel, setOtpChannel] = useState('WHATSAPP');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   // `api.url` is a getter on a module, so changing it does not re-render on its
@@ -64,7 +62,6 @@ export default function AuthScreen() {
     setMode(MODES.SIGN_IN);
     setError('');
     setOtp({ sent: false, code: '', devCode: '' });
-    setOtpChannel('WHATSAPP');
     setRegRole(REGISTRABLE[key]?.[0]?.code || 'USER');
   }
 
@@ -109,7 +106,9 @@ export default function AuthScreen() {
   const canRegister = Boolean(REGISTRABLE[roleKey]);
   const roleOptions = REGISTRABLE[roleKey] || [];
 
-  const submitSignIn = () => run(() => signIn(roleKey, form.phone_no.trim(), form.password));
+  // One field, either identifier. `identity` holds whichever was typed; the
+  // client decides from the shape of it which one the server is being told.
+  const submitSignIn = () => run(() => signIn(roleKey, form.identity.trim(), form.password));
 
   const submitRegister = () =>
     run(() =>
@@ -124,10 +123,7 @@ export default function AuthScreen() {
 
   const sendOtp = () =>
     run(async () => {
-      const r = await requestOtp(form.phone_no.trim(), {
-        channel: otpChannel,
-        email_id: otpChannel === 'EMAIL' ? form.email_id.trim() || undefined : undefined,
-      });
+      const r = await requestOtp(form.email_id.trim());
       setOtp({ sent: true, code: '', devCode: r.otp_code || '', sentTo: r.sent_to, channel: r.channel });
     });
 
@@ -139,9 +135,9 @@ export default function AuthScreen() {
   const submitOtp = () =>
     run(async () => {
       try {
-        await verifyOtp(roleKey, form.phone_no.trim(), otp.code.trim(), {
+        await verifyOtp(roleKey, form.email_id.trim(), otp.code.trim(), {
           full_name: form.full_name.trim() || undefined,
-          email_id: form.email_id.trim() || undefined,
+          phone_no: form.phone_no.trim() || undefined,
         });
       } catch (e) {
         if (e.payload?.needs_registration) {
@@ -150,8 +146,8 @@ export default function AuthScreen() {
             // never by proving you hold a phone number.
             throw new Error('No control-room account uses this number. An administrator has to create one for you.');
           }
-          setOtp((o) => ({ ...o, needsName: true }));
-          throw new Error('This number is new here. Enter your name to create an account.');
+          setOtp((o) => ({ ...o, needsName: true, missing: e.payload.missing || [] }));
+          throw new Error('This address is new here. Enter your name and mobile number to create an account.');
         }
         throw e;
       }
@@ -223,60 +219,54 @@ export default function AuthScreen() {
             />
           )}
 
-          <Field
-            label="Mobile number"
-            value={form.phone_no}
-            onChangeText={set('phone_no')}
-            placeholder="10-digit mobile number"
-            keyboardType="number-pad"
-            maxLength={10}
-          />
-
-          {mode === MODES.REGISTER && (
+          {/*
+            The OTP tab asks only for an address. A code proves one contact
+            detail, and an address is the one that can be proved for nothing -
+            so demanding a mobile number before sending an email would be
+            asking for something this step has no use for.
+          */}
+          {mode === MODES.OTP ? (
             <Field
-              label="Email (optional)"
+              label="Email address"
               value={form.email_id}
               onChangeText={set('email_id')}
-              placeholder="Used for invoices and statements"
+              placeholder="you@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
+              autoComplete="email"
+              hint={otp.sent ? undefined : 'We will email you a 6-digit code.'}
+            />
+          ) : mode === MODES.SIGN_IN ? (
+            <Field
+              label="Email or mobile number"
+              value={form.identity}
+              onChangeText={set('identity')}
+              placeholder="you@example.com or 10-digit number"
+              autoCapitalize="none"
+              autoComplete="username"
+            />
+          ) : (
+            <Field
+              label="Mobile number"
+              value={form.phone_no}
+              onChangeText={set('phone_no')}
+              placeholder="10-digit mobile number"
+              keyboardType="number-pad"
+              maxLength={10}
+              hint="The ambulance crew call this if they cannot find you."
             />
           )}
 
-          {/*
-            Choosing where the code goes. The mobile number above stays
-            required either way: it identifies the account, and the crew ring
-            it when they cannot find the patient. Email only carries the code.
-          */}
-          {mode === MODES.OTP && !otp.sent && (
-            <>
-              <Text style={[typo.small, { marginBottom: 6 }]}>Send my code by</Text>
-              <View style={[styles.tabs, { marginBottom: spacing.md }]}>
-                {[['WHATSAPP', 'WhatsApp'], ['EMAIL', 'Email']].map(([c, label]) => (
-                  <Pressable
-                    key={c}
-                    onPress={() => setOtpChannel(c)}
-                    style={[styles.tab, otpChannel === c && styles.tabActive]}
-                  >
-                    <Text style={{ color: otpChannel === c ? colors.white : colors.muted, fontWeight: '600', fontSize: 13.5 }}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              {otpChannel === 'EMAIL' && (
-                <Field
-                  label="Email address"
-                  value={form.email_id}
-                  onChangeText={set('email_id')}
-                  placeholder="where the code should arrive"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  hint="Leave empty to use the address already on your account."
-                />
-              )}
-            </>
+          {mode === MODES.REGISTER && (
+            <Field
+              label="Email address"
+              value={form.email_id}
+              onChangeText={set('email_id')}
+              placeholder="you@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+            />
           )}
 
           {mode !== MODES.OTP && (
@@ -299,15 +289,32 @@ export default function AuthScreen() {
                 keyboardType="number-pad"
                 maxLength={6}
               />
+              {/*
+                The address checked out but belongs to nobody yet, so this is
+                a sign-up. The number is asked for here rather than up front
+                because it plays no part in proving the address - it is what
+                the ambulance crew ring when they cannot find the patient.
+              */}
               {otp.needsName ? (
-                <Field
-                  label="Your name"
-                  value={form.full_name}
-                  onChangeText={set('full_name')}
-                  placeholder="Your name"
-                  autoCapitalize="words"
-                  hint="This number has no account yet, so this creates one."
-                />
+                <>
+                  <Field
+                    label="Your name"
+                    value={form.full_name}
+                    onChangeText={set('full_name')}
+                    placeholder="Your name"
+                    autoCapitalize="words"
+                    hint="This email has no account yet, so this creates one."
+                  />
+                  <Field
+                    label="Mobile number"
+                    value={form.phone_no}
+                    onChangeText={set('phone_no')}
+                    placeholder="10-digit mobile number"
+                    keyboardType="number-pad"
+                    maxLength={10}
+                    hint="The ambulance crew call this if they cannot find you."
+                  />
+                </>
               ) : null}
 
               {otp.sentTo ? (
