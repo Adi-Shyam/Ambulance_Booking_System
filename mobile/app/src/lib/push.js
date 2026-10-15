@@ -79,7 +79,28 @@ export async function registerForPush() {
       Constants?.expoConfig?.extra?.eas?.projectId ?? Constants?.easConfig?.projectId;
     if (!projectId) return { token: null, reason: 'This build has no Expo project id.' };
 
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    let token;
+    try {
+      ({ data: token } = await Notifications.getExpoPushTokenAsync({ projectId }));
+    } catch (err) {
+      // An installed Android app reaches Expo's push service through Firebase
+      // Cloud Messaging, and asks for its token through it. With no FCM
+      // credentials on the project that request fails here - before anything
+      // is ever sent - so the only symptom is that notifications never arrive,
+      // with nothing on screen to say why.
+      //
+      // Expo Go carries Expo's own credentials, which is exactly why this
+      // works there and stops working in a built APK.
+      const fcm = /firebase|fcm|default app|sender ?id|no credentials/i.test(err.message || '');
+      return {
+        token: null,
+        needsFcm: fcm,
+        reason: fcm
+          ? 'This build has no Firebase credentials, so Android cannot issue a push token. '
+            + 'Add FCM credentials to the Expo project and rebuild.'
+          : err.message,
+      };
+    }
 
     await api.post('/api/notifications/push-token', {
       push_token: token,

@@ -93,6 +93,15 @@ export default function DutyScreen({ navigation }) {
         }
         setLastPing(me.provider.last_seen_timestamp);
       }
+      // The screen's lock reads `provider` from the auth context, not from
+      // this response, so a status that has moved has to be put back there or
+      // the console stays locked against its own fresh evidence. This is what
+      // "Check again" was failing to do: it fetched the right answer and threw
+      // away the one field that mattered.
+      if (me.provider && me.provider.verification_status !== provider?.verification_status) {
+        await refreshProvider().catch(() => {});
+      }
+
       // The inbox is only reachable once the vehicle is verified.
       if (me.provider?.verification_status === 'VERIFIED') {
         const r = await api.get('/api/provider/offers');
@@ -103,7 +112,7 @@ export default function DutyScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [provider?.verification_status, refreshProvider]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useResync(load, [load]);

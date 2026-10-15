@@ -49,10 +49,27 @@ function init(httpServer) {
   });
 
   io.on('connection', (socket) => {
-    const { sub: userId, role, providerId } = socket.user;
+    const { sub: userId, role } = socket.user;
     socket.join(roomForUser(userId));
-    if (providerId) socket.join(roomForProvider(providerId));
     if (role === 'ADMIN') socket.join(ADMIN_ROOM);
+
+    // Read from the database, not from the token.
+    //
+    // A token is issued at sign-in, and a driver creates their vehicle
+    // afterwards - that is the order the app asks for them. So the token of
+    // the session that creates a profile still says there is no provider, and
+    // trusting it meant that driver never joined their own room: no dispatch
+    // offer, no verification result, nothing, until they signed out and in
+    // again and got a token that knew.
+    //
+    // Identity belongs in the token. Which provider an account owns is
+    // mutable state, and mutable state belongs where it can change.
+    const owned = db
+      .prepare('SELECT provider_id FROM providers WHERE user_id = ?')
+      .get(userId);
+    const providerId = owned?.provider_id || null;
+    if (providerId) socket.join(roomForProvider(providerId));
+    socket.user.providerId = providerId;
 
     // A booking room carries the patient's pickup address and the ambulance's
     // live position, so joining one is an authorisation decision, not a

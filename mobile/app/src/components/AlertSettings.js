@@ -42,11 +42,20 @@ export default function AlertSettings({ title = 'Alerts' }) {
     setBusy(true);
     setError('');
     setNotice('');
-    const { token, reason } = await registerForPush();
+    const { token, reason, needsFcm } = await registerForPush();
     setBusy(false);
     await check();
-    if (token) setNotice('This phone is registered. Try the test alert.');
-    else setError(reason || 'Could not switch alerts on.');
+    if (token) {
+      setNotice('This phone is registered. Try the test alert.');
+    } else {
+      // Said plainly, because the alternative is a driver concluding the app
+      // is broken when the build simply cannot issue a token.
+      setError(
+        needsFcm
+          ? `${reason} Until then, offers still appear while this screen is open.`
+          : reason || 'Could not switch alerts on.'
+      );
+    }
   }
 
   async function test() {
