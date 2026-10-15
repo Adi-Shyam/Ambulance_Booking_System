@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { ROLES, roleFor } from '../lib/config';
 import { Banner, Body, Button, Card, Field, H1, H2, Small } from '../components/ui';
 import BackendSetting from '../components/BackendSetting';
+import PasswordStrength from '../components/PasswordStrength';
 import { colors, radius, spacing, typo } from '../lib/theme';
 
 /**
@@ -14,7 +15,7 @@ import { colors, radius, spacing, typo } from '../lib/theme';
  * the picker rather than on a form: you say who you are first, and the chosen
  * mode is then checked against the account the credentials belong to.
  */
-const MODES = { SIGN_IN: 'SIGN_IN', REGISTER: 'REGISTER', OTP: 'OTP' };
+const MODES = { SIGN_IN: 'SIGN_IN', REGISTER: 'REGISTER', OTP: 'OTP', FORGOT: 'FORGOT' };
 
 // Only the two self-service roles can create their own account. A control-room
 // login is made by another administrator (F.13), never from the sign-in screen.
@@ -27,7 +28,7 @@ const REGISTRABLE = {
 };
 
 export default function AuthScreen() {
-  const { signIn, startRegistration, requestOtp, verifyOtp } = useAuth();
+  const { signIn, startRegistration, requestOtp, verifyOtp, forgotPassword, resetPassword } = useAuth();
 
   const [roleKey, setRoleKey] = useState(null);
   const [mode, setMode] = useState(MODES.SIGN_IN);
@@ -37,6 +38,7 @@ export default function AuthScreen() {
   const [regRole, setRegRole] = useState('USER');
   const [otp, setOtp] = useState({ sent: false, code: '', devCode: '' });
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   // `api.url` is a getter on a module, so changing it does not re-render on its
   // own. Bumping this is what redraws the screens that display the address.
@@ -47,6 +49,7 @@ export default function AuthScreen() {
 
   async function run(fn) {
     setError('');
+    setNotice('');
     setBusy(true);
     try {
       await fn();
@@ -125,6 +128,24 @@ export default function AuthScreen() {
         role_code: regRole,
       });
       setOtp({ sent: true, code: '', devCode: r.otp_code || '', sentTo: r.sent_to, channel: r.channel });
+    });
+
+  /** Forgotten password, step one: a code to the address. */
+  const sendReset = () =>
+    run(async () => {
+      const r = await forgotPassword(form.email_id.trim());
+      setOtp({ sent: true, code: '', devCode: r.otp_code || '', sentTo: r.sent_to, channel: 'EMAIL' });
+      setNotice(r.message);
+    });
+
+  /** Step two: the code and a new password. Every session is then revoked. */
+  const submitReset = () =>
+    run(async () => {
+      const r = await resetPassword(form.email_id.trim(), otp.code.trim(), form.password);
+      setMode(MODES.SIGN_IN);
+      setOtp({ sent: false, code: '', devCode: '' });
+      setForm((f) => ({ ...f, password: '', identity: f.email_id }));
+      setNotice(r.message);
     });
 
   /** The second step: the code comes back, and the account is created. */
@@ -213,6 +234,7 @@ export default function AuthScreen() {
 
         <Card>
           <Banner kind="error">{error}</Banner>
+          {notice ? <Banner kind="info">{notice}</Banner> : null}
 
           {mode === MODES.REGISTER && roleOptions.length > 1 && (
             <>
@@ -248,7 +270,7 @@ export default function AuthScreen() {
             so demanding a mobile number before sending an email would be
             asking for something this step has no use for.
           */}
-          {mode === MODES.OTP ? (
+          {mode === MODES.FORGOT || mode === MODES.OTP ? (
             <Field
               label="Email address"
               value={form.email_id}
@@ -257,7 +279,11 @@ export default function AuthScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
-              hint={otp.sent ? undefined : 'We will email you a 6-digit code.'}
+              hint={
+                otp.sent ? undefined
+                : mode === MODES.FORGOT ? 'We will email a reset code to this address.'
+                : 'We will email you a 6-digit code.'
+              }
             />
           ) : mode === MODES.SIGN_IN ? (
             <Field
@@ -298,14 +324,31 @@ export default function AuthScreen() {
             leaving the field on screen would invite someone to change it
             between the two halves of one request.
           */}
-          {mode !== MODES.OTP && !otp.sent && (
-            <Field
-              label="Password"
-              value={form.password}
-              onChangeText={set('password')}
-              placeholder={mode === MODES.REGISTER ? 'At least 6 characters' : 'Your password'}
-              secureTextEntry
-            />
+          {(mode === MODES.FORGOT ? otp.sent : mode !== MODES.OTP && !otp.sent) && (
+            <>
+              <Field
+                label={mode === MODES.FORGOT ? 'New password' : 'Password'}
+                value={form.password}
+                onChangeText={set('password')}
+                placeholder={mode === MODES.SIGN_IN ? 'Your password' : 'At least 8 characters'}
+                secureTextEntry
+              />
+              {/*
+                Only while choosing one. On the sign-in form the password is
+                being supplied, not chosen, and grading an existing password
+                there would be both useless and rude.
+              */}
+              {mode !== MODES.SIGN_IN ? (
+                <PasswordStrength
+                  value={form.password}
+                  owner={{
+                    full_name: form.full_name,
+                    phone_no: form.phone_no,
+                    email_id: form.email_id,
+                  }}
+                />
+              ) : null}
+            </>
           )}
 
           {/*
@@ -370,7 +413,49 @@ export default function AuthScreen() {
             </>
           )}
 
-          {mode === MODES.SIGN_IN && <Button title="Sign in" onPress={submitSignIn} loading={busy} />}
+          {mode === MODES.SIGN_IN && (
+            <>
+              <Button title="Sign in" onPress={submitSignIn} loading={busy} />
+              <Button
+                title="Forgot password?"
+                variant="ghost"
+                style={{ marginTop: spacing.sm }}
+                onPress={() => {
+                  setMode(MODES.FORGOT);
+                  setError('');
+                  setNotice('');
+                  setOtp({ sent: false, code: '', devCode: '' });
+                  // Carry whatever they typed, if it looks like an address.
+                  setForm((f) => ({
+                    ...f,
+                    email_id: f.identity.includes('@') ? f.identity : f.email_id,
+                  }));
+                }}
+              />
+            </>
+          )}
+
+          {mode === MODES.FORGOT && (
+            <>
+              <Button
+                title={otp.sent ? 'Set new password' : 'Email me a reset code'}
+                onPress={otp.sent ? submitReset : sendReset}
+                loading={busy}
+              />
+              <Button
+                title={otp.sent ? 'Send a new code' : 'Back to sign in'}
+                variant="ghost"
+                style={{ marginTop: spacing.sm }}
+                onPress={() => {
+                  if (otp.sent) return sendReset();
+                  setMode(MODES.SIGN_IN);
+                  setError('');
+                  setNotice('');
+                  return undefined;
+                }}
+              />
+            </>
+          )}
           {mode === MODES.REGISTER && (
             <Button
               title={otp.sent ? 'Verify and create account' : 'Email me a code'}

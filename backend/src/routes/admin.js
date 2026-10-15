@@ -396,7 +396,9 @@ router.post('/users/:userId/status', asyncRoute(async (req, res) => {
 router.post('/admins', asyncRoute(async (req, res) => {
   const full_name = v.name(req.body.full_name);
   const phone_no = v.phone(req.body.phone_no);
-  const password = v.password(req.body.password);
+  // A control-room account is the most valuable one in the system, so it gets
+  // the same check as everyone else rather than a laxer one for convenience.
+  const password = v.newPassword(req.body.password, 'password', { full_name, phone_no, email_id });
   if (db.prepare('SELECT 1 FROM users WHERE phone_no = ?').get(phone_no)) {
     return res.status(409).json({ error: 'An account already exists for this mobile number' });
   }

@@ -19,6 +19,12 @@ const config = {
   port: int(process.env.PORT, 4000),
   corsOrigin: process.env.CORS_ORIGIN || '*',
 
+  // How many accounts one address may create in an hour (NF.3). Configurable
+  // because a test suite legitimately creates more accounts in a minute than a
+  // device ever should in an hour, and because a lab demonstration on one
+  // shared network is a single address to this limiter.
+  registerLimitPerHour: int(process.env.REGISTER_LIMIT_PER_HOUR, 10),
+
   jwtSecret: process.env.JWT_SECRET || 'dev-only-secret-change-me',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '24h',
   exposeOtp: bool(process.env.EXPOSE_OTP_IN_RESPONSE, true),

@@ -28,6 +28,10 @@ async function startTestServer() {
   process.env.WHATSAPP_TOKEN = '';              // mock transport
   process.env.EMAIL_PROVIDER = 'mock';          // no outbound mail from a test
   process.env.PUSH_MOCK = 'true';               // nor any call to Expo
+  // The suite creates more accounts in a minute than the per-address limit
+  // allows in an hour. The sign-in limiter is left alone, because that is the
+  // one NF.3's own test exercises.
+  process.env.REGISTER_LIMIT_PER_HOUR = '500';
   process.env.OFFER_TIMEOUT_SECONDS = '45';
 
   const { seed } = require('../src/db/seed');

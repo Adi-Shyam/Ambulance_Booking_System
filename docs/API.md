@@ -19,7 +19,9 @@ conventional status code: 400 validation, 401 authentication, 403 role or owners
 | POST | `/api/auth/otp/verify` | *public.* `otp_code` plus the same identifier the code was issued against. Proves that one detail and sets `email_verified` or `phone_verified` accordingly. A correct code on an **address** with no account **registers it** when `full_name` and `phone_no` are also sent, returning 201; without them it answers 404 with `needs_registration: true` and a `missing` array naming the fields. A code on an unknown **number** is never a registration — nothing here proves a number belongs to the person holding it. Accounts made this way have no password; the schema allows a NULL hash for exactly these. |
 | GET | `/api/auth/me` | Current user, provider profile and organisation. |
 | PATCH | `/api/auth/me` | `full_name`, `email_id`. |
-| POST | `/api/auth/password` | `new_password`, plus `current_password` unless the account has none — one registered by OTP sets its first password with the bearer token alone, since demanding a password it never had would strand it on code-only sign-in. |
+| POST | `/api/auth/password` | `new_password` (subject to the policy below), plus `current_password` unless the account has none — one registered by OTP sets its first password with the bearer token alone, since demanding a password it never had would strand it on code-only sign-in. |
+| POST | `/api/auth/password/forgot` | *public.* `email_id`. Emails a reset code. **Answers identically whether or not an account exists** — saying "no account found" would turn this into a way to ask which addresses are registered, one at a time, without signing in to anything (NF.3). The code carries purpose `RESET`. |
+| POST | `/api/auth/password/reset` | *public.* `email_id`, `otp_code`, `new_password`. Only a `RESET` code is accepted, so a sign-in code read over someone's shoulder cannot become a password change. **Revokes every session on that account**: whoever is resetting has either forgotten the password or suspects somebody else knows it, and in the second case leaving that person signed in defeats the exercise. The new password is checked before the code is consumed, so a refused one does not cost another email. |
 | POST | `/api/auth/logout` | Revokes *this* session in D1 by its `jti`, so the token stops being accepted immediately rather than at its 24-hour expiry. Clearing it on the device alone would not. |
 | GET | `/api/auth/sessions` | The account's own last 25 sessions — issued, expiry, revoked — with `current: true` on the one making the request. This is what DFD 0.1.3 writes. |
 
@@ -33,6 +35,27 @@ Session response:
   "provider": null
 }
 ```
+
+### Password policy
+
+Applied wherever a password is **chosen** — registration, reset, change, and
+creating an administrator. Signing in is deliberately exempt: an account whose
+password predates the rules must still be able to sign in, or tightening a
+rule would lock people out of their own accounts.
+
+| Rule | |
+|---|---|
+| At least 8 characters | NIST SP 800-63B's floor |
+| At most 72 bytes | bcrypt hashes only the first 72 and silently ignores the rest, so a longer password is not as strong as it looks |
+| Not on the common-password list | catches `P@ssw0rd`, which satisfies every composition rule and is worthless |
+| Not one character repeated, nor a run of consecutive ones | `aaaaaaaa`, `abcdefgh` |
+| Must not contain the holder's own name, number or email | a common real choice, and the first guess of anyone who knows them |
+| 12+ characters, **or** a mix of at least three character classes | length or variety, not both |
+
+There is deliberately no "one upper case, one digit, one symbol" rule. That
+formula reliably produces `Password1!`, which satisfies it and is guessed in
+seconds; a blocklist and a length floor do more work. The last rule is the
+compromise: a long passphrase needs no punctuation, a short password does.
 
 ---
 

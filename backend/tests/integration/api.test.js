@@ -37,7 +37,7 @@ describe('authentication and role-based access (F.1, F.2)', () => {
 
   test('registration enforces the data dictionary phone format', async () => {
     const r = await post('/api/auth/register', {
-      full_name: 'Test Person', phone_no: '1234567890', password: 'secret1',
+      full_name: 'Test Person', phone_no: '1234567890', password: 'Vx7#qLm4Zt',
     });
     assert.equal(r.status, 400);
     assert.equal(r.body.field, 'phone_no');
@@ -47,7 +47,7 @@ describe('authentication and role-based access (F.1, F.2)', () => {
     // An address is how an account is reached and how it is proved, so it is
     // required rather than optional.
     const r = await post('/api/auth/register', {
-      full_name: 'No Address', phone_no: '9765430001', password: 'secret1',
+      full_name: 'No Address', phone_no: '9765430001', password: 'Vx7#qLm4Zt',
     });
     assert.equal(r.status, 400);
     assert.equal(r.body.field, 'email_id');
@@ -56,7 +56,7 @@ describe('authentication and role-based access (F.1, F.2)', () => {
   test('a duplicate email address cannot register twice', async () => {
     const r = await post('/api/auth/register', {
       full_name: 'Impostor', phone_no: '9765430002',
-      email_id: 'adithya@example.in', password: 'secret1',
+      email_id: 'adithya@example.in', password: 'Vx7#qLm4Zt',
     });
     assert.equal(r.status, 409);
     assert.equal(r.body.field, 'email_id');
@@ -65,7 +65,7 @@ describe('authentication and role-based access (F.1, F.2)', () => {
   test('a duplicate mobile number cannot register twice', async () => {
     const r = await post('/api/auth/register', {
       full_name: 'Impostor', phone_no: ACCOUNTS.patient.phone,
-      email_id: 'impostor@example.in', password: 'secret1',
+      email_id: 'impostor@example.in', password: 'Vx7#qLm4Zt',
     });
     assert.equal(r.status, 409);
   });

@@ -125,6 +125,19 @@ export function AuthProvider({ children }) {
       startRegistration: (details) => api.post('/api/auth/register', details),
 
       /**
+       * Forgotten password, in two steps like registration.
+       *
+       * `forgotPassword` answers the same way whether or not the address has
+       * an account, so the screen cannot be used to ask which addresses are
+       * registered. The person who mistyped theirs finds out from the email
+       * that never arrives.
+       */
+      forgotPassword: (email_id) => api.post('/api/auth/password/forgot', { email_id }),
+
+      resetPassword: (email_id, otp_code, new_password) =>
+        api.post('/api/auth/password/reset', { email_id, otp_code, new_password }),
+
+      /**
        * Asks for a code against one contact detail. `identifier` is an email
        * address or a mobile number; the server works out which from the shape
        * it arrives in, so the screen does not have to.

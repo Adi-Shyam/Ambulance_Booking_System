@@ -11,6 +11,10 @@ const PINCODE_RE = /^[0-9]{6}$/;
 
 const ROLE_CODES = ['USER', 'DRIVER', 'ORG', 'ADMIN'];
 // What a vehicle can be registered as.
+// NIST SP 800-63B puts the floor at 8 and says the useful work is done by
+// length and a blocklist, not by composition rules.
+const MIN_PASSWORD = 8;
+
 const AMBULANCE_TYPES = ['BLS', 'ALS', 'ICU', 'PTV'];
 // What a patient can ask for. EMG is a request, not a vehicle class: it means
 // "emergency, send whatever is nearest", so no provider ever registers as one
@@ -65,10 +69,152 @@ function email(value, field = 'email_id') {
   return v;
 }
 
+/**
+ * Checks a password being *supplied*, not chosen.
+ *
+ * Deliberately lenient: an account whose password predates a stricter rule
+ * must still be able to sign in, or tightening the rule would lock people out
+ * of their own accounts. Choosing a new one goes through `newPassword`.
+ */
 function password(value, field = 'password') {
   const v = String(required(value, field));
   if (v.length < 6) throw new ValidationError('Password must be at least 6 characters', field);
   return v;
+}
+
+// Passwords that appear at the top of every breach corpus, plus the ones this
+// particular system invites. A blocklist catches what a composition rule
+// cannot: "Password1!" satisfies every rule about upper case, digits and
+// symbols, and is still among the first an attacker tries.
+const COMMON_PASSWORDS = new Set([
+  '12345678', '123456789', '1234567890', 'password', 'password1', 'password123',
+  'qwerty', 'qwerty123', 'qwertyuiop', 'abc12345', 'iloveyou', 'sunshine',
+  'princess', 'football', 'baseball', 'welcome', 'welcome1', 'admin123',
+  'administrator', 'letmein', 'monkey', 'dragon', 'master', 'superman',
+  'trustno1', 'starwars', 'whatever', 'computer', 'michael', 'jennifer',
+  'jordan23', 'pokemon', 'samsung', 'asdfghjk', 'zxcvbnm', '1q2w3e4r',
+  '1qaz2wsx', 'qazwsxedc', 'passw0rd', 'p@ssword', 'p@ssw0rd', 'secret123',
+  'changeme', 'default', 'india123', 'bharat123', 'krishna', 'ganesh123',
+  // The ones this project hands out, and the words sitting on every screen.
+  'user1234', 'driver123', 'ambulance', 'ambulance123', 'hospital', 'emergency',
+  'patient123', 'doctor123', 'nitk1234', 'surathkal',
+]);
+
+const CLASSES = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/];
+
+/** "aaaaaaaa" and "11111111" are long without being anything. */
+const isOneCharacterRepeated = (s) => new Set(s).size === 1;
+
+/** "12345678", "abcdefgh" and their reverses. */
+function isRunOfConsecutive(s) {
+  if (s.length < 4) return false;
+  let ascending = true;
+  let descending = true;
+  for (let i = 1; i < s.length; i += 1) {
+    const step = s.charCodeAt(i) - s.charCodeAt(i - 1);
+    if (step !== 1) ascending = false;
+    if (step !== -1) descending = false;
+  }
+  return ascending || descending;
+}
+
+/**
+ * Checks a password being *chosen*.
+ *
+ * The rules follow NIST SP 800-63B rather than the familiar
+ * one-of-each-character-class formula, because that formula reliably produces
+ * "Password1!" - which satisfies it and is guessed in seconds. Length and a
+ * blocklist do more work than composition does.
+ *
+ * `owner` lets the check see the name, number and address being registered, so
+ * a password that is simply one of those cannot be chosen. That is a common
+ * real choice and an obvious first guess for anyone who knows the person.
+ */
+function newPassword(value, field = 'password', owner = {}) {
+  const v = String(required(value, field));
+  const lower = v.toLowerCase();
+
+  if (v.length < MIN_PASSWORD) {
+    throw new ValidationError(`Password must be at least ${MIN_PASSWORD} characters`, field);
+  }
+
+  // bcrypt hashes only the first 72 bytes and silently ignores the rest, so a
+  // longer password is not as strong as it looks. Refusing is honest; quietly
+  // truncating is not.
+  if (Buffer.byteLength(v, 'utf8') > 72) {
+    throw new ValidationError('Password must be 72 bytes or fewer', field);
+  }
+
+  if (/^\s|\s$/.test(v)) {
+    throw new ValidationError('Password must not begin or end with a space', field);
+  }
+
+  if (COMMON_PASSWORDS.has(lower)) {
+    throw new ValidationError('That password is one of the most commonly used. Choose another.', field);
+  }
+
+  if (isOneCharacterRepeated(v)) {
+    throw new ValidationError('Password must not be the same character repeated', field);
+  }
+
+  if (isRunOfConsecutive(v)) {
+    throw new ValidationError('Password must not be a run of consecutive characters', field);
+  }
+
+  // Their own details, which anyone who knows them would try first.
+  // Split on anything that is not a letter or digit, so "Adithya Shyam"
+  // contributes "adithya" and "shyam" separately - otherwise "adithya2026"
+  // passes, since it contains neither the full name nor is contained by it.
+  const ownPieces = [
+    owner.full_name,
+    owner.phone_no,
+    owner.email_id ? String(owner.email_id).split('@')[0] : null,
+  ]
+    .filter(Boolean)
+    .flatMap((p) => String(p).toLowerCase().split(/[^a-z0-9]+/))
+    .filter((p) => p.length >= 4);
+
+  for (const piece of ownPieces) {
+    if (lower.includes(piece) || piece.includes(lower)) {
+      throw new ValidationError('Password must not contain your name, number or email address', field);
+    }
+  }
+
+  // Composition only where length cannot carry the weight on its own. A long
+  // passphrase is strong without punctuation; a short password is not.
+  const classes = CLASSES.filter((re) => re.test(v)).length;
+  if (v.length < 12 && classes < 3) {
+    throw new ValidationError(
+      'Password must be 12 characters or longer, or mix upper case, lower case, digits and symbols',
+      field
+    );
+  }
+
+  return v;
+}
+
+/**
+ * How strong a password is, for the meter the sign-up form shows. Scoring
+ * rather than refusing: this never blocks anything, it only describes.
+ */
+function passwordStrength(value, owner = {}) {
+  const v = String(value || '');
+  if (!v) return { score: 0, label: 'Enter a password' };
+
+  try {
+    newPassword(v, 'password', owner);
+  } catch (err) {
+    return { score: 0, label: err.message, acceptable: false };
+  }
+
+  let score = 1;
+  if (v.length >= 12) score += 1;
+  if (v.length >= 16) score += 1;
+  if (CLASSES.filter((re) => re.test(v)).length >= 3) score += 1;
+  if (new Set(v).size >= Math.min(10, v.length)) score += 1;
+
+  const label = ['', 'Acceptable', 'Fair', 'Good', 'Strong', 'Very strong'][Math.min(score, 5)];
+  return { score: Math.min(score, 5), label, acceptable: true };
 }
 
 function oneOf(value, allowed, field) {
@@ -118,9 +264,9 @@ function text(value, max, field) {
 
 module.exports = {
   ValidationError,
-  required, phone, name, email, password, oneOf, coordinate,
+  required, phone, name, email, password, newPassword, passwordStrength, oneOf, coordinate,
   vehicleRegNo, pincode, rating, text,
-  ROLE_CODES, AMBULANCE_TYPES, REQUEST_TYPES, AVAILABILITY, VERIFICATION, BOOKING_STATUS,
+  ROLE_CODES, MIN_PASSWORD, AMBULANCE_TYPES, REQUEST_TYPES, AVAILABILITY, VERIFICATION, BOOKING_STATUS,
   ASSIGNMENT_STATUS, TRIP_MILESTONES, PAYMENT_MODES, PAYMENT_STATUS,
   MESSAGE_CHANNELS, DELIVERY_STATES, REPORT_TYPES,
 };

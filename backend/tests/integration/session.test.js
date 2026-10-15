@@ -69,7 +69,7 @@ describe('signing in writes to D1 (DFD 0.1.3)', () => {
 
     const started = await post('/api/auth/register', {
       full_name: 'Session Test User', phone_no: '9765432100',
-      email_id: EMAIL, password: 'secret123',
+      email_id: EMAIL, password: 'Vx7#qLm4Zt',
     });
     assert.equal(started.status, 202, 'accepted and under way, not created');
     assert.equal(started.body.needs_verification, true);
@@ -81,14 +81,14 @@ describe('signing in writes to D1 (DFD 0.1.3)', () => {
 
     const created = await post('/api/auth/otp/verify', {
       email_id: EMAIL, otp_code: started.body.otp_code,
-      full_name: 'Session Test User', phone_no: '9765432100', password: 'secret123',
+      full_name: 'Session Test User', phone_no: '9765432100', password: 'Vx7#qLm4Zt',
     });
     assert.equal(created.status, 201, JSON.stringify(created.body));
     assert.equal(sessionsFor(created.body.user.user_id).length, 1, 'now it signs them in');
     assert.equal(created.body.user.email_verified, true);
 
     // The password set during registration works afterwards.
-    const signedIn = await post('/api/auth/login', { email_id: EMAIL, password: 'secret123' });
+    const signedIn = await post('/api/auth/login', { email_id: EMAIL, password: 'Vx7#qLm4Zt' });
     assert.equal(signedIn.status, 200, 'the password given at sign-up is the one on the account');
     assert.equal(sessionsFor(created.body.user.user_id).length, 2, 'and that is a second session');
   });

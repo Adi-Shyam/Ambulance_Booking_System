@@ -58,7 +58,7 @@ test('the registration form creates nothing until the code comes back', async ()
 
   const started = await post('/api/auth/register', {
     full_name: 'Form Registration', phone_no: PHONE,
-    email_id: EMAIL, password: 'secret123',
+    email_id: EMAIL, password: 'Vx7#qLm4Zt',
   });
 
   assert.equal(started.status, 202, 'accepted, not created');
@@ -73,14 +73,14 @@ test('the registration form creates nothing until the code comes back', async ()
 
   const done = await post('/api/auth/otp/verify', {
     email_id: EMAIL, otp_code: code,
-    full_name: 'Form Registration', phone_no: PHONE, password: 'secret123',
+    full_name: 'Form Registration', phone_no: PHONE, password: 'Vx7#qLm4Zt',
   });
 
   assert.equal(done.status, 201, JSON.stringify(done.body));
   assert.equal(done.body.user.email_verified, true, 'the address is proved');
   assert.equal(done.body.user.phone_verified, false, 'the number still is not');
 
-  const login = await post('/api/auth/login', { email_id: EMAIL, password: 'secret123' });
+  const login = await post('/api/auth/login', { email_id: EMAIL, password: 'Vx7#qLm4Zt' });
   assert.equal(login.status, 200, 'the password chosen on the form is the one that works');
 });
 
@@ -101,7 +101,7 @@ test('a weak password is refused before a code is spent', async () => {
 test('an address already registered is refused before a code is spent', async () => {
   const r = await post('/api/auth/register', {
     full_name: 'Already Here', phone_no: '9811133303',
-    email_id: 'adithya@example.in', password: 'secret123',
+    email_id: 'adithya@example.in', password: 'Vx7#qLm4Zt',
   });
 
   assert.equal(r.status, 409);
