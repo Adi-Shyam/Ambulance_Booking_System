@@ -25,6 +25,18 @@ const codeFor = (phone) =>
 test.before(async () => { await startTestServer(); });
 test.after(async () => { await stopTestServer(); });
 
+// The sign-in screen has one OTP tab serving both "sign me in" and "I am new
+// here", so it has to ask for REGISTER. It used to send no purpose at all,
+// which defaults to LOGIN - and LOGIN refuses a number it does not know, so
+// registration by code was reachable from the API and never from the app.
+test('a code for an unknown number needs purpose REGISTER, not the LOGIN default', async () => {
+  const asLogin = await post('/api/auth/otp/request', { phone_no: '9833399911' });
+  assert.equal(asLogin.status, 404, 'LOGIN is for accounts that exist, and says so early');
+
+  const asRegister = await post('/api/auth/otp/request', { phone_no: '9833399911', purpose: 'REGISTER' });
+  assert.equal(asRegister.status, 200, 'REGISTER is how a new number gets a code at all');
+});
+
 test('a correct code on an unknown number asks for a name rather than failing', async () => {
   await post('/api/auth/otp/request', { phone_no: NEW_PATIENT, purpose: 'REGISTER' });
   const r = await post('/api/auth/otp/verify', { phone_no: NEW_PATIENT, otp_code: codeFor(NEW_PATIENT) });
@@ -69,6 +81,30 @@ test('an OTP-only account can set a first password without knowing one', async (
 
   const login = await post('/api/auth/login', { phone_no: NEW_BY_CODE, password: 'chosen-later' });
   assert.equal(login.status, 200, 'and that password then works');
+});
+
+// The exact sequence the sign-in screen performs: one code, verified twice -
+// first without a name, which asks for one, then with it. Consuming the code
+// on that first reply made the second fail with "Incorrect verification code",
+// so no account could ever be created from the app. Every other case here
+// requests a fresh code before verifying, which is why none of them caught it.
+test('one code survives the round trip that asks for a name', async () => {
+  const PHONE = '9811122277';
+  await post('/api/auth/otp/request', { phone_no: PHONE, purpose: 'REGISTER' });
+  const code = codeFor(PHONE);
+
+  const asked = await post('/api/auth/otp/verify', { phone_no: PHONE, otp_code: code });
+  assert.equal(asked.status, 404);
+  assert.equal(asked.body.needs_registration, true);
+
+  const done = await post('/api/auth/otp/verify', {
+    phone_no: PHONE, otp_code: code, full_name: 'Second Attempt',
+  });
+  assert.equal(done.status, 201, `the same code had to still work: ${JSON.stringify(done.body)}`);
+
+  // And only once - it is spent now.
+  const replay = await post('/api/auth/otp/verify', { phone_no: PHONE, otp_code: code });
+  assert.equal(replay.status, 401, 'a consumed code cannot be replayed');
 });
 
 test('a provider registered by OTP still starts PENDING', async () => {

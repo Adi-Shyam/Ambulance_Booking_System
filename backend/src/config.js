@@ -59,6 +59,22 @@ const config = {
     countryCode: process.env.DEFAULT_COUNTRY_CODE || '91',
   },
 
+  // Verification codes by email (F.1). Phone stays the account identifier - the
+  // data dictionary makes phone_no NOT NULL UNIQUE and the driver has to be
+  // able to ring the patient - so this is a delivery channel, not an identity.
+  // Leave EMAIL_HOST empty to run the mock transport, which logs the code and
+  // writes the same `messages` row the SMTP path does.
+  email: {
+    host: process.env.EMAIL_HOST || '',
+    port: int(process.env.EMAIL_PORT, 587),
+    // Port 465 is implicit TLS; 587 upgrades with STARTTLS, which nodemailer
+    // does on its own when `secure` is false.
+    secure: bool(process.env.EMAIL_SECURE, false),
+    user: process.env.EMAIL_USER || '',
+    pass: process.env.EMAIL_PASS || '',
+    from: process.env.EMAIL_FROM || 'Ambulance Booking System <no-reply@nitk.ac.in>',
+  },
+
   maps: {
     provider: (process.env.MAPS_PROVIDER || 'osm').toLowerCase(),
     googleKey: process.env.GOOGLE_MAPS_API_KEY || '',

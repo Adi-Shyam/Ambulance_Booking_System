@@ -114,23 +114,54 @@ router.post('/otp/request', otpRequestLimiter, asyncRoute(async (req, res) => {
   const phone_no = v.phone(req.body.phone_no);
   const purpose = String(req.body.purpose || 'LOGIN').toUpperCase();
 
-  if (purpose === 'LOGIN' && !findUserByPhone(phone_no)) {
+  // Which channel carries the code. The account is still identified by its
+  // phone number either way - the data dictionary makes `phone_no` NOT NULL
+  // UNIQUE, and a driver who cannot find the patient has to be able to ring
+  // them - so this chooses a postman, not an identity.
+  const channel = v.oneOf(
+    String(req.body.channel || 'WHATSAPP').toUpperCase(), ['WHATSAPP', 'EMAIL'], 'channel'
+  );
+
+  const existing = findUserByPhone(phone_no);
+  if (purpose === 'LOGIN' && !existing) {
     return res.status(404).json({ error: 'No account found for this mobile number' });
+  }
+
+  // An email channel needs an address. For an existing account that is the one
+  // already on file; for a registration the account does not exist yet, so the
+  // address has to arrive with the request.
+  let email_id = null;
+  if (channel === 'EMAIL') {
+    email_id = v.email(req.body.email_id) || existing?.email_id || null;
+    if (!email_id) {
+      return res.status(400).json({
+        error: existing
+          ? 'This account has no email address on file. Add one, or ask for the code by WhatsApp.'
+          : 'Send the email address the code should go to.',
+        field: 'email_id',
+      });
+    }
   }
 
   const otp_code = String(Math.floor(100000 + Math.random() * 900000));
   const otp_expiry = new Date(Date.now() + OTP_TTL_MS).toISOString();
+  const destination = channel === 'EMAIL' ? email_id : phone_no;
 
   db.prepare('UPDATE otps SET consumed = 1 WHERE phone_no = ? AND consumed = 0').run(phone_no);
   db.prepare(
-    'INSERT INTO otps (phone_no, otp_code, otp_expiry, purpose, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(phone_no, otp_code, otp_expiry, purpose, nowIso());
+    `INSERT INTO otps (phone_no, otp_code, otp_expiry, purpose, channel, destination, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(phone_no, otp_code, otp_expiry, purpose, channel, destination, nowIso());
 
-  await messaging.sendOtp({ phoneNo: phone_no, otpCode: otp_code });
-  audit('OTP_ISSUED', { entityType: 'phone', entityId: phone_no, details: { purpose } });
+  await messaging.sendOtp({ phoneNo: phone_no, otpCode: otp_code, channel, emailId: email_id });
+  audit('OTP_ISSUED', { entityType: 'phone', entityId: phone_no, details: { purpose, channel } });
 
   res.json({
-    message: 'Verification code sent',
+    message: channel === 'EMAIL' ? 'Verification code emailed' : 'Verification code sent',
+    channel,
+    // Masked: enough to recognise where to look, without handing a full
+    // address or number back to whoever asked for the code.
+    sent_to: messaging.maskDestination(destination, channel),
     otp_expiry,
     // Development convenience only - see EXPOSE_OTP_IN_RESPONSE in .env
     ...(config.exposeOtp ? { otp_code, dev_note: 'otp_code is exposed because EXPOSE_OTP_IN_RESPONSE=true' } : {}),
@@ -152,15 +183,21 @@ router.post('/otp/verify', otpVerifyLimiter, asyncRoute(async (req, res) => {
     return res.status(401).json({ error: 'This verification code has expired' });
   }
 
-  db.prepare('UPDATE otps SET consumed = 1 WHERE id = ?').run(row.id);
-
   let user = findUserByPhone(phone_no);
 
   // F.1: a verified code on an unknown number is a registration, not a dead
   // end. The schema allows a NULL password_hash precisely for these - they
   // sign in by code every time rather than holding a password they never set.
+  //
+  // Everything that can refuse this request is settled *before* the code is
+  // consumed, because the sign-in screen asks twice: once with the code, and
+  // again with the name the first reply asked for. Consuming on the first of
+  // those left the second with no code to present, so registering from the
+  // app was impossible however correct the code was.
+  let full_name = null;
+  let role_code = null;
   if (!user) {
-    const full_name = req.body.full_name ? v.name(req.body.full_name) : null;
+    full_name = req.body.full_name ? v.name(req.body.full_name) : null;
     if (!full_name) {
       return res.status(404).json({
         error: 'This number has no account yet. Send your name to create one.',
@@ -170,23 +207,36 @@ router.post('/otp/verify', otpVerifyLimiter, asyncRoute(async (req, res) => {
 
     // Never by code: an administrator is created by another administrator
     // (F.13), and a provider still has to submit a vehicle for verification.
-    const role_code = v.oneOf(req.body.role_code || 'USER', ['USER', 'DRIVER', 'ORG'], 'role_code');
+    role_code = v.oneOf(req.body.role_code || 'USER', ['USER', 'DRIVER', 'ORG'], 'role_code');
+  }
+
+  // Single use from here on: the code has done its job and cannot be replayed.
+  db.prepare('UPDATE otps SET consumed = 1 WHERE id = ?').run(row.id);
+
+  if (!user) {
     const now = nowIso();
     const user_id = nextId('user');
+
+    // If the code travelled by email, that address is now a proven one: the
+    // person reading this request received it there. Keep it even when the
+    // client did not resend it, rather than registering an account with no
+    // email and asking for it again later.
+    const email_id = v.email(req.body.email_id)
+      || (row.channel === 'EMAIL' ? row.destination : null);
 
     db.prepare(
       `INSERT INTO users (user_id, full_name, phone_no, email_id, password_hash, role_code,
                           verification_status, registration_date, created_at, updated_at)
        VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`
     ).run(
-      user_id, full_name, phone_no, v.email(req.body.email_id), role_code,
+      user_id, full_name, phone_no, email_id, role_code,
       role_code === 'USER' ? 'VERIFIED' : 'PENDING',
       now.slice(0, 10), now, now
     );
 
     audit('USER_REGISTERED', {
       actorUserId: user_id, actorRole: role_code, entityType: 'user', entityId: user_id,
-      details: { phone_no, role_code, via: 'otp' },
+      details: { phone_no, role_code, via: 'otp', channel: row.channel || 'WHATSAPP' },
     });
 
     user = findUserByPhone(phone_no);

@@ -257,6 +257,23 @@ for the template of the same name — so switching is a configuration change, no
 a code change. Template parameters cannot contain newlines, which is why the
 layout belongs in the approved template and each parameter is a flat value.
 
+**Email** — a verification code can travel by email instead of WhatsApp: the
+sign-in screen offers the choice, and `POST /api/auth/otp/request` takes
+`"channel": "EMAIL"`. The mobile number is still what identifies the account —
+the data dictionary makes `phone_no` NOT NULL UNIQUE, and a crew who cannot find
+the patient has to be able to ring them — so email chooses the postman, not the
+identity.
+
+Leave `EMAIL_HOST` empty for the mock transport, which logs the code and writes
+the same `messages` row. For real delivery with Gmail: turn on 2-step
+verification, create an App Password at `myaccount.google.com/apppasswords`, and
+use it as `EMAIL_PASS` — a normal Google password will not authenticate over
+SMTP.
+
+Email is worth knowing about because it is the only channel with no conditions
+attached: no 24-hour window, no template approval, and no billing relationship.
+Where a business-initiated WhatsApp message needs all three, an email needs none.
+
 **Maps** — defaults to OpenStreetMap: Nominatim for geocoding, OSRM for routing, no
 API key required. Set `MAPS_PROVIDER=google` with a `GOOGLE_MAPS_API_KEY` to switch to
 the Google Geocoding and Directions APIs. If a provider is unreachable the system

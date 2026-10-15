@@ -7,7 +7,7 @@ specification item can be checked against its implementation.
 
 | SRS | Requirement | DFD process | Implementation | Client surface |
 |---|---|---|---|---|
-| F.1 | Registration and OTP verification | 0.1.1 Register & Verify OTP | `backend/src/routes/auth.js` — `/register`, `/otp/request`, `/otp/verify` | Patient & driver `AuthScreen` |
+| F.1 | Registration and OTP verification | 0.1.1 Register & Verify OTP | `backend/src/routes/auth.js` — `/register`, `/otp/request`, `/otp/verify`; the code travels by WhatsApp or email per `channel` | `AuthScreen`, with the channel chosen on the OTP tab |
 | F.2 | Role-based login | 0.1.2 Authenticate Credentials, 0.1.3 Create Session & Assign Role | `routes/auth.js` `/login`, `middleware/auth.js` `requireRole` | Mode chosen per app; dashboard is ADMIN-only |
 | F.3 | Select ambulance type and place booking | 0.2.1 Capture Type & Pickup, 0.2.3 Create Booking Record | `routes/bookings.js` `POST /api/bookings` | `BookScreen` |
 | F.4 | Capture pickup location | 0.2.2 Resolve & Validate Location | `services/maps.js`, `routes/geo.js` | GPS, map pin, address search |
@@ -90,6 +90,8 @@ Each is pinned by a regression test in `backend/tests/api.test.js` or `backend/t
 | F.10 / NF.3 | The billed distance was read from the driver's request body, so the party being paid chose the amount. | The request body no longer contributes; the figure is measured server-side. |
 | NF.3 / C.1 | `booking:subscribe` joined any socket room on request, streaming another patient's pickup address and live ambulance GPS to any signed-in account. | The room now applies the same ownership rule as the REST route. |
 | NF.3 | Sign-in and OTP verification accepted unlimited attempts, leaving a six-digit code exhaustible. | Per-account rate limits on sign-in, OTP issue and OTP verification. |
+| F.1 | `/otp/verify` consumed the code before checking whether a name was needed, so the screen's two-step registration — verify, be asked for a name, verify again — always failed the second step. Registering from the app was impossible however correct the code was. | Everything that can refuse the request is settled before the code is marked consumed. |
+| F.1 | The app requested codes with no `purpose`, which defaults to `LOGIN`, and `LOGIN` refuses a number with no account. Registration by code was reachable over the API and never from the app. | The client asks for `REGISTER`, which is what a screen serving both sign-in and sign-up needs. |
 | F.7 / C.6 | Accept, decline and expiry each read the assignment state and then wrote it, so two simultaneous responses could both pass the check. | All three transitions are conditional updates that verify a row actually changed. |
 | NF.1 / C.6 | A driver who accepted and then went silent left the booking in ASSIGNED for ever: the patient watched a frozen ETA and the ambulance was held BUSY permanently. Nothing swept for it. | A recovery sweep retires stale providers, flags stalled trips to the patient and control room, and re-offers bookings left mid-match. |
 | C.6 / F.13 | "Available" was defined three different ways, so the dashboard could report ambulances free that the matcher would never consider. | One predicate in `services/availability.js`, used by the matcher, the dashboard and the patient view; stale providers are reported separately. |

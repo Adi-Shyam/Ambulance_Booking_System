@@ -51,10 +51,13 @@ CREATE INDEX IF NOT EXISTS idx_users_role ON users(role_code);
 
 CREATE TABLE IF NOT EXISTS otps (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  phone_no    TEXT NOT NULL,
+  phone_no    TEXT NOT NULL,                          -- the account identifier, whatever carried the code
   otp_code    TEXT NOT NULL,                          -- 6 numeric digits
   otp_expiry  TEXT NOT NULL,                          -- issue time + 5 min
   purpose     TEXT NOT NULL DEFAULT 'LOGIN',
+  channel     TEXT NOT NULL DEFAULT 'WHATSAPP'
+              CHECK (channel IN ('WHATSAPP','EMAIL')),
+  destination TEXT,                                   -- the address or number it was sent to
   consumed    INTEGER NOT NULL DEFAULT 0,
   created_at  TEXT NOT NULL
 );
@@ -229,8 +232,9 @@ CREATE TABLE IF NOT EXISTS fare_rules (
 CREATE TABLE IF NOT EXISTS messages (
   message_id          TEXT PRIMARY KEY,
   booking_id          TEXT REFERENCES bookings(booking_id),
-  recipient_phone     TEXT NOT NULL,
-  message_channel     TEXT NOT NULL CHECK (message_channel IN ('WHATSAPP','PUSH','SMS')),
+  recipient_phone     TEXT NOT NULL,                   -- the account this was sent on behalf of
+  recipient_email     TEXT,                             -- set when message_channel = 'EMAIL'
+  message_channel     TEXT NOT NULL CHECK (message_channel IN ('WHATSAPP','PUSH','SMS','EMAIL')),
   message_template_id TEXT,
   body                TEXT,
   delivery_state      TEXT NOT NULL DEFAULT 'SENT'

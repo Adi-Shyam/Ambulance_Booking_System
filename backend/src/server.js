@@ -80,6 +80,7 @@ server.listen(config.port, () => {
   console.log(`  Database          ${DB_FILE}`);
   console.log(`  Maps provider     ${maps.provider()}`);
   console.log(`  WhatsApp          ${messaging.usingCloudApi() ? 'Cloud API' : 'mock transport (messages printed + stored)'}`);
+  console.log(`  Email             ${messaging.usingSmtp() ? `SMTP ${config.email.host}:${config.email.port}` : 'mock transport (codes printed + stored)'}`);
   console.log(`  Offer timeout     ${config.dispatch.offerTimeoutSeconds}s, up to ${config.dispatch.maxRetries} candidates\n`);
   dispatch.resumePendingOffers();
   watchdog.start();

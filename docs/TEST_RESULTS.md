@@ -2,7 +2,7 @@
 
 Ambulance Booking System — Team 16, IT303.
 
-Generated from an actual run by `npm run test:report` on 2026-10-12T09:41:26.919Z.
+Generated from an actual run by `npm run test:report` on 2026-10-15T15:25:20.644Z.
 Do not edit by hand; re-run the command instead.
 
 ## Summary
@@ -10,11 +10,11 @@ Do not edit by hand; re-run the command instead.
 | Level | Purpose | Tests | Passed | Failed |
 |---|---|---|---|---|
 | Unit | One module in isolation | 76 | 76 | 0 |
-| Integration | Modules working together over HTTP and the database | 59 | 59 | 0 |
+| Integration | Modules working together over HTTP and the database | 69 | 69 | 0 |
 | System | Whole-system behaviour and failure recovery | 11 | 11 | 0 |
-| **Total** | | **146** | **146** | **0** |
+| **Total** | | **156** | **156** | **0** |
 
-All 146 tests passed.
+All 156 tests passed.
 
 ## Unit tests
 
@@ -52,14 +52,24 @@ All 146 tests passed.
 | 8 | booking privacy (NF.3, C.1) | Pass |
 | 9 | brute-force protection (NF.3) | Pass |
 | 10 | administration and analytics (F.13) | Pass |
-| 11 | a correct code on an unknown number asks for a name rather than failing | Pass |
-| 12 | supplying a name creates the account and returns a session | Pass |
-| 13 | an OTP-only account cannot be signed into with a password | Pass |
-| 14 | an OTP-only account can set a first password without knowing one | Pass |
-| 15 | a provider registered by OTP still starts PENDING | Pass |
-| 16 | nobody can register themselves as an administrator by OTP | Pass |
-| 17 | signing in writes to D1 (DFD 0.1.3) | Pass |
-| 18 | a user can see and end their sessions | Pass |
+| 11 | a code can be sent to an email address instead of WhatsApp | Pass |
+| 12 | the response masks where the code went | Pass |
+| 13 | verifying an emailed code registers the account and keeps the address | Pass |
+| 14 | an existing account needs no address: the one on file is used | Pass |
+| 15 | an email channel with nowhere to send says so rather than failing silently | Pass |
+| 16 | a driver with no address on file is told to use WhatsApp | Pass |
+| 17 | an unrecognised channel is refused | Pass |
+| 18 | omitting the channel still sends by the phone, unchanged | Pass |
+| 19 | a code for an unknown number needs purpose REGISTER, not the LOGIN default | Pass |
+| 20 | a correct code on an unknown number asks for a name rather than failing | Pass |
+| 21 | supplying a name creates the account and returns a session | Pass |
+| 22 | an OTP-only account cannot be signed into with a password | Pass |
+| 23 | an OTP-only account can set a first password without knowing one | Pass |
+| 24 | one code survives the round trip that asks for a name | Pass |
+| 25 | a provider registered by OTP still starts PENDING | Pass |
+| 26 | nobody can register themselves as an administrator by OTP | Pass |
+| 27 | signing in writes to D1 (DFD 0.1.3) | Pass |
+| 28 | a user can see and end their sessions | Pass |
 
 ## System tests
 

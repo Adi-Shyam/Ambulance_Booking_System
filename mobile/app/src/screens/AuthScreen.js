@@ -34,6 +34,10 @@ export default function AuthScreen() {
   const [form, setForm] = useState({ full_name: '', phone_no: '', email_id: '', password: '' });
   const [regRole, setRegRole] = useState('USER');
   const [otp, setOtp] = useState({ sent: false, code: '', devCode: '' });
+  // Which way the verification code travels. The account is identified by its
+  // mobile number either way - this chooses the postman, not the identity -
+  // which is why the number field stays required in both cases.
+  const [otpChannel, setOtpChannel] = useState('WHATSAPP');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   // `api.url` is a getter on a module, so changing it does not re-render on its
@@ -60,6 +64,7 @@ export default function AuthScreen() {
     setMode(MODES.SIGN_IN);
     setError('');
     setOtp({ sent: false, code: '', devCode: '' });
+    setOtpChannel('WHATSAPP');
     setRegRole(REGISTRABLE[key]?.[0]?.code || 'USER');
   }
 
@@ -119,8 +124,11 @@ export default function AuthScreen() {
 
   const sendOtp = () =>
     run(async () => {
-      const r = await requestOtp(form.phone_no.trim());
-      setOtp({ sent: true, code: '', devCode: r.otp_code || '' });
+      const r = await requestOtp(form.phone_no.trim(), {
+        channel: otpChannel,
+        email_id: otpChannel === 'EMAIL' ? form.email_id.trim() || undefined : undefined,
+      });
+      setOtp({ sent: true, code: '', devCode: r.otp_code || '', sentTo: r.sent_to, channel: r.channel });
     });
 
   /**
@@ -133,6 +141,7 @@ export default function AuthScreen() {
       try {
         await verifyOtp(roleKey, form.phone_no.trim(), otp.code.trim(), {
           full_name: form.full_name.trim() || undefined,
+          email_id: form.email_id.trim() || undefined,
         });
       } catch (e) {
         if (e.payload?.needs_registration) {
@@ -234,6 +243,42 @@ export default function AuthScreen() {
             />
           )}
 
+          {/*
+            Choosing where the code goes. The mobile number above stays
+            required either way: it identifies the account, and the crew ring
+            it when they cannot find the patient. Email only carries the code.
+          */}
+          {mode === MODES.OTP && !otp.sent && (
+            <>
+              <Text style={[typo.small, { marginBottom: 6 }]}>Send my code by</Text>
+              <View style={[styles.tabs, { marginBottom: spacing.md }]}>
+                {[['WHATSAPP', 'WhatsApp'], ['EMAIL', 'Email']].map(([c, label]) => (
+                  <Pressable
+                    key={c}
+                    onPress={() => setOtpChannel(c)}
+                    style={[styles.tab, otpChannel === c && styles.tabActive]}
+                  >
+                    <Text style={{ color: otpChannel === c ? colors.white : colors.muted, fontWeight: '600', fontSize: 13.5 }}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {otpChannel === 'EMAIL' && (
+                <Field
+                  label="Email address"
+                  value={form.email_id}
+                  onChangeText={set('email_id')}
+                  placeholder="where the code should arrive"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  hint="Leave empty to use the address already on your account."
+                />
+              )}
+            </>
+          )}
+
           {mode !== MODES.OTP && (
             <Field
               label="Password"
@@ -265,9 +310,16 @@ export default function AuthScreen() {
                 />
               ) : null}
 
+              {otp.sentTo ? (
+                <Small style={{ marginBottom: spacing.sm }}>
+                  Sent to {otp.sentTo} by {otp.channel === 'EMAIL' ? 'email' : 'WhatsApp'}.
+                </Small>
+              ) : null}
+
               {otp.devCode ? (
                 <Banner kind="warn">
-                  Development mode: your code is {otp.devCode}. In production this arrives by WhatsApp or SMS.
+                  Development mode: your code is {otp.devCode}. With a transport configured it
+                  arrives {otp.channel === 'EMAIL' ? 'by email' : 'by WhatsApp or SMS'} instead.
                 </Banner>
               ) : null}
             </>

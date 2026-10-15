@@ -12,22 +12,35 @@ const { messageId } = require('../utils/ids');
 
 const usingCloudApi = () => Boolean(config.whatsapp.token && config.whatsapp.phoneNumberId);
 
+/**
+ * Verification codes may travel by email instead of WhatsApp (F.1). Email is a
+ * delivery channel only - `phone_no` remains the account identifier, because
+ * the data dictionary makes it NOT NULL UNIQUE and a driver who cannot find
+ * the patient has to be able to ring them.
+ *
+ * Email is also the one channel that is unconditionally free: it has no
+ * 24-hour customer service window, needs no approved template, and no billing
+ * relationship with Meta.
+ */
+const usingSmtp = () => Boolean(config.email.host && config.email.user);
+
 function toE164(phoneNo) {
   const digits = String(phoneNo).replace(/[^0-9]/g, '');
   return digits.length > 10 ? digits : config.whatsapp.countryCode + digits;
 }
 
-function record({ recipientPhone, channel, templateId, body, bookingId, deliveryState, providerResponse }) {
+function record({ recipientPhone, recipientEmail, channel, templateId, body, bookingId, deliveryState, providerResponse }) {
   const id = messageId();
   db.prepare(
-    `INSERT INTO messages (message_id, booking_id, recipient_phone, message_channel,
+    `INSERT INTO messages (message_id, booking_id, recipient_phone, recipient_email, message_channel,
                            message_template_id, body, delivery_state, delivery_timestamp,
                            provider_response, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     bookingId || null,
     recipientPhone,
+    recipientEmail || null,
     channel,
     templateId || null,
     body || null,
@@ -125,9 +138,79 @@ async function sendWhatsApp({ phoneNo, body, params, templateId, bookingId }) {
   }
 }
 
-/** SMS/OTP path. Shares the same delivery log so receipts are uniform. */
-async function sendOtp({ phoneNo, otpCode }) {
+// nodemailer builds a connection pool, so the transport is created once and
+// reused rather than per message.
+let mailer = null;
+function transport() {
+  if (!mailer) {
+    // Required here rather than at the top of the file so a deployment that
+    // never sends email does not pay to load it.
+    const nodemailer = require('nodemailer');
+    mailer = nodemailer.createTransport({
+      host: config.email.host,
+      port: config.email.port,
+      secure: config.email.secure,
+      auth: { user: config.email.user, pass: config.email.pass },
+    });
+  }
+  return mailer;
+}
+
+/**
+ * Sends an email and logs it beside every other channel, so the control room's
+ * alert log stays a single list. Like sendWhatsApp it resolves rather than
+ * rejects: a mail outage must not take a registration down with it.
+ */
+async function sendEmail({ emailId, phoneNo, subject, body, templateId, bookingId }) {
+  if (!usingSmtp()) {
+    console.log(`\n[email:mock -> ${emailId}] ${subject}\n${body}\n`);
+    return record({
+      recipientPhone: phoneNo, recipientEmail: emailId, channel: 'EMAIL',
+      templateId, body, bookingId, deliveryState: 'SENT',
+      providerResponse: { transport: 'mock' },
+    });
+  }
+  try {
+    const info = await transport().sendMail({
+      from: config.email.from,
+      to: emailId,
+      subject,
+      text: body,
+    });
+    return record({
+      recipientPhone: phoneNo, recipientEmail: emailId, channel: 'EMAIL',
+      templateId, body, bookingId, deliveryState: 'SENT',
+      providerResponse: { messageId: info.messageId, accepted: info.accepted },
+    });
+  } catch (err) {
+    console.error('[email] send failed:', err.message);
+    return record({
+      recipientPhone: phoneNo, recipientEmail: emailId, channel: 'EMAIL',
+      templateId, body, bookingId, deliveryState: 'FAILED',
+      providerResponse: { error: err.message },
+    });
+  }
+}
+
+/**
+ * Sends a verification code (F.1) over whichever channel was asked for. All
+ * channels share the delivery log, so a receipt looks the same however the
+ * code travelled.
+ */
+async function sendOtp({ phoneNo, otpCode, channel = 'WHATSAPP', emailId = null }) {
   const body = `Your Ambulance Booking System verification code is ${otpCode}. It is valid for 5 minutes. Do not share this code.`;
+
+  if (channel === 'EMAIL') {
+    if (!emailId) throw new Error('sendOtp: channel EMAIL needs an emailId');
+    return sendEmail({
+      emailId,
+      phoneNo,
+      subject: `${otpCode} is your Ambulance Booking verification code`,
+      body,
+      templateId: config.whatsapp.templates.otp,
+    });
+  }
+
   if (!usingCloudApi()) {
     console.log(`\n[otp:mock -> ${phoneNo}] ${otpCode}\n`);
     return record({
@@ -136,6 +219,24 @@ async function sendOtp({ phoneNo, otpCode }) {
     });
   }
   return sendWhatsApp({ phoneNo, body, templateId: config.whatsapp.templates.otp });
+}
+
+/**
+ * `a***a@gmail.com` / `98****3210` - enough for someone to recognise where the
+ * code went, without the response disclosing a full address or number to
+ * whoever happened to ask for it.
+ */
+function maskDestination(value, channel) {
+  const v = String(value || '');
+  if (channel === 'EMAIL') {
+    const [local, domain] = v.split('@');
+    if (!domain) return v;
+    const head = local.slice(0, 1);
+    const tail = local.length > 2 ? local.slice(-1) : '';
+    const stars = Math.max(1, local.length - head.length - tail.length);
+    return `${head}${'*'.repeat(stars)}${tail}@${domain}`;
+  }
+  return v.length <= 6 ? v : `${v.slice(0, 2)}${'*'.repeat(v.length - 6)}${v.slice(-4)}`;
 }
 
 /** Marks a delivery receipt, e.g. from a Meta webhook. */
@@ -313,4 +414,7 @@ const templates = {
   },
 };
 
-module.exports = { sendWhatsApp, sendOtp, updateDeliveryState, templates, usingCloudApi, toE164 };
+module.exports = {
+  sendWhatsApp, sendEmail, sendOtp, updateDeliveryState, templates,
+  usingCloudApi, usingSmtp, toE164, maskDestination,
+};

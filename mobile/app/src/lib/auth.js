@@ -102,7 +102,13 @@ export function AuthProvider({ children }) {
         return adopt(await api.post('/api/auth/register', details), roleKey);
       },
 
-      requestOtp: (phone_no) => api.post('/api/auth/otp/request', { phone_no }),
+      /**
+       * `options.channel` is 'WHATSAPP' (the default) or 'EMAIL'. The number is
+       * sent either way, because it identifies the account; email only decides
+       * where the code is delivered.
+       */
+      requestOtp: (phone_no, options = {}) =>
+        api.post('/api/auth/otp/request', { phone_no, purpose: 'REGISTER', ...options }),
 
       /**
        * A correct code on an unknown number registers it (F.1). The server

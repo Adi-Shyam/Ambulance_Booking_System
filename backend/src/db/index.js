@@ -17,6 +17,7 @@ const db = new DatabaseSync(DB_FILE);
 function migrate() {
   const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
   db.exec(schema);
+  widenCheckConstraints();
   addMissingColumns();
   seedFareRules();
 }
@@ -31,7 +32,81 @@ const COLUMN_ADDITIONS = [
   ['sessions', 'token_id', 'TEXT'],
   ['sessions', 'role_code', 'TEXT'],
   ['sessions', 'revoked_at', 'TEXT'],
+  ['messages', 'recipient_email', 'TEXT'],
+  ['otps', 'channel', "TEXT NOT NULL DEFAULT 'WHATSAPP'"],
+  ['otps', 'destination', 'TEXT'],
 ];
+
+// A CHECK constraint cannot be altered in place, so widening one means
+// rebuilding the table and copying the rows across. Each entry is guarded on
+// the DDL SQLite has stored, so it runs once and is a no-op afterwards -
+// including on a database created fresh from schema.sql, which already has the
+// wider constraint.
+//
+// `otps.channel` is not here: adding a column *with* a CHECK is allowed, so
+// COLUMN_ADDITIONS handles that one.
+function widenCheckConstraints() {
+  // EMAIL joined WHATSAPP/PUSH/SMS when verification codes gained an email
+  // channel (F.1). Databases created before that reject the insert outright.
+  rebuildTable({
+    table: 'messages',
+    needsRebuild: (ddl) => !ddl.includes("'EMAIL'"),
+    createSql: `CREATE TABLE messages_migrated (
+      message_id          TEXT PRIMARY KEY,
+      booking_id          TEXT REFERENCES bookings(booking_id),
+      recipient_phone     TEXT NOT NULL,
+      recipient_email     TEXT,
+      message_channel     TEXT NOT NULL CHECK (message_channel IN ('WHATSAPP','PUSH','SMS','EMAIL')),
+      message_template_id TEXT,
+      body                TEXT,
+      delivery_state      TEXT NOT NULL DEFAULT 'SENT'
+                          CHECK (delivery_state IN ('SENT','DELIVERED','READ','FAILED')),
+      delivery_timestamp  TEXT,
+      provider_response   TEXT,
+      created_at          TEXT NOT NULL
+    )`,
+    indexes: ['CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC)'],
+  });
+}
+
+/**
+ * Replaces `table` with `createSql`, carrying over every column the two shapes
+ * share. Columns new to the rebuilt table keep their default, which is how
+ * `recipient_email` arrives populated with NULL rather than failing the copy.
+ */
+function rebuildTable({ table, needsRebuild, createSql, indexes = [] }) {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
+  if (!row || !needsRebuild(row.sql)) return;
+
+  const before = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
+
+  db.exec('BEGIN');
+  try {
+    db.exec(`DROP TABLE IF EXISTS ${table}_migrated`);
+    db.exec(createSql);
+
+    // Intersect the two column lists so the copy does not name a column that
+    // only one side has, in either direction.
+    const oldCols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    const newCols = db.prepare(`PRAGMA table_info(${table}_migrated)`).all().map((c) => c.name);
+    const shared = oldCols.filter((c) => newCols.includes(c));
+
+    db.exec(
+      `INSERT INTO ${table}_migrated (${shared.join(', ')})
+       SELECT ${shared.join(', ')} FROM ${table}`
+    );
+    db.exec(`DROP TABLE ${table}`);
+    db.exec(`ALTER TABLE ${table}_migrated RENAME TO ${table}`);
+    for (const sql of indexes) db.exec(sql);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+
+  const after = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
+  console.log(`[db] rebuilt ${table} to widen a CHECK constraint (${after}/${before} rows carried over)`);
+}
 
 function addMissingColumns() {
   for (const [table, column, definition] of COLUMN_ADDITIONS) {
