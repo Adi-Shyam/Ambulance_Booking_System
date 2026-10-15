@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS providers (
   org_id              TEXT REFERENCES organisations(org_id),
   vehicle_reg_no      TEXT NOT NULL UNIQUE,           -- KA19AB1234
   ambulance_type      TEXT NOT NULL
-                      CHECK (ambulance_type IN ('BLS','ALS','ICU','PTV')),
+                      CHECK (ambulance_type IN ('BLS','ALS','ICU','PTV')),  -- no EMG: that is a request, not a vehicle
   availability_status TEXT NOT NULL DEFAULT 'OFFLINE'
                       CHECK (availability_status IN ('AVAILABLE','BUSY','OFFLINE')),
   licence_no          TEXT,
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   booking_id          TEXT PRIMARY KEY,               -- 'BK' + 8 digits
   user_id             TEXT NOT NULL REFERENCES users(user_id),
   ambulance_type      TEXT NOT NULL
-                      CHECK (ambulance_type IN ('BLS','ALS','ICU','PTV')),
+                      CHECK (ambulance_type IN ('BLS','ALS','ICU','PTV','EMG')),
   latitude            REAL NOT NULL,
   longitude           REAL NOT NULL,
   address_text        TEXT,
@@ -221,7 +221,7 @@ CREATE TABLE IF NOT EXISTS ratings (
 -- ------------------------------------------------------- support tables
 CREATE TABLE IF NOT EXISTS fare_rules (
   ambulance_type TEXT PRIMARY KEY
-                 CHECK (ambulance_type IN ('BLS','ALS','ICU','PTV')),
+                 CHECK (ambulance_type IN ('BLS','ALS','ICU','PTV','EMG')),
   base_fare      REAL NOT NULL,
   per_km_rate    REAL NOT NULL,
   type_surcharge REAL NOT NULL DEFAULT 0,
@@ -256,6 +256,23 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, id DESC);
+
+-- F.14 - Expo push tokens, so an alert reaches a phone whose app is closed.
+-- One row per device: a driver may carry a work phone and a personal one, and
+-- a dispatch offer has to reach whichever is in their hand. A token is owned
+-- by whoever last registered it, which is what the UNIQUE clause enforces -
+-- re-registering moves it rather than delivering one person's offers to
+-- another's handset after a shared device changes hands.
+CREATE TABLE IF NOT EXISTS push_tokens (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     TEXT NOT NULL REFERENCES users(user_id),
+  push_token  TEXT NOT NULL UNIQUE,
+  platform    TEXT,
+  device_name TEXT,
+  last_seen   TEXT NOT NULL,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_push_user ON push_tokens(user_id);
 
 -- Constraint C.5: every booking, dispatch decision, status change and
 -- administrative action is logged for reproducibility and dispute resolution.

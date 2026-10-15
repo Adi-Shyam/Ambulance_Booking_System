@@ -35,7 +35,7 @@ function ownedBooking(bookingId, req) {
 
 // ------------------------------------------------------ F.3 + F.4 create
 router.post('/', authenticate, requireRole('USER'), asyncRoute(async (req, res) => {
-  const ambulance_type = v.oneOf(req.body.ambulance_type, v.AMBULANCE_TYPES, 'ambulance_type');
+  const ambulance_type = v.oneOf(req.body.ambulance_type, v.REQUEST_TYPES, 'ambulance_type');
 
   // 0.2.2 Resolve & Validate Location: coordinates win; a typed address is
   // geocoded; if neither resolves the booking is rejected rather than dispatched
@@ -151,6 +151,66 @@ router.get('/:bookingId', authenticate, asyncRoute(async (req, res) => {
   res.json({ booking: dispatch.publicBooking(booking), invoice, rating, assignments });
 }));
 
+// --------------------------------------------- in-app calling (F.6, C.5)
+/**
+ * Hands the caller the other party's number so the app can open the dialer,
+ * and records that it happened.
+ *
+ * The call itself goes over the phone network rather than through the app on
+ * purpose. A crew who cannot find a patient, or a patient watching an
+ * ambulance drive past, need a call that works on a weak signal, with the app
+ * in the background, and that does not depend on this server being reachable.
+ * Carrying voice in-app would be a worse answer to the same problem.
+ *
+ * The number is only ever released between the two parties of a live booking,
+ * and the release is audited (C.5), because a patient's number is exactly the
+ * sort of thing that should not be quietly readable.
+ */
+router.post('/:bookingId/call', authenticate, asyncRoute(async (req, res) => {
+  const booking = ownedBooking(req.params.bookingId, req);
+
+  if (!booking.assigned_provider_id) {
+    return res.status(409).json({ error: 'No ambulance is assigned to this booking yet' });
+  }
+  if (!OPEN_STATES.includes(booking.booking_status)) {
+    return res.status(409).json({
+      error: `This booking is ${booking.booking_status.toLowerCase()}, so there is nobody to call`,
+    });
+  }
+
+  const provider = dispatch.providerWithUser(booking.assigned_provider_id);
+
+  // The driver is given the patient; everyone else is given the driver. That
+  // puts the control room through to the crew, which is almost always what it
+  // wants, and means an administrator never pulls a patient's number out of
+  // this route by accident.
+  const callerIsDriver = Boolean(req.provider)
+    && booking.assigned_provider_id === req.provider.provider_id;
+
+  const counterparty = !callerIsDriver
+    ? { to_role: 'DRIVER', name: provider.full_name, phone_no: provider.phone_no,
+        vehicle_reg_no: provider.vehicle_reg_no }
+    : { to_role: 'PATIENT',
+        name: booking.patient_name
+          || db.prepare('SELECT full_name FROM users WHERE user_id = ?').get(booking.user_id)?.full_name,
+        phone_no: booking.contact_phone
+          || db.prepare('SELECT phone_no FROM users WHERE user_id = ?').get(booking.user_id)?.phone_no };
+
+  if (!counterparty.phone_no) {
+    return res.status(422).json({ error: 'No contact number is on file for the other party' });
+  }
+
+  audit('CALL_PLACED', {
+    actorUserId: req.user.user_id,
+    actorRole: req.user.role_code,
+    entityType: 'booking',
+    entityId: booking.booking_id,
+    details: { to_role: counterparty.to_role, booking_status: booking.booking_status },
+  });
+
+  res.json({ booking_id: booking.booking_id, ...counterparty });
+}));
+
 // ------------------------------------------------- F.8 live tracking + ETA
 router.get('/:bookingId/track', authenticate, asyncRoute(async (req, res) => {
   const booking = ownedBooking(req.params.bookingId, req);
@@ -245,6 +305,8 @@ router.post('/:bookingId/cancel', authenticate, asyncRoute(async (req, res) => {
       body: `${booking.booking_id} was cancelled: ${reason}`,
       eventType: 'CANCELLED',
       bookingId: booking.booking_id,
+      // A driver already on the road needs to stop driving.
+      push: { priority: 'high', data: { type: 'CANCELLED', booking_id: booking.booking_id } },
     });
 
     // A driver already on the way is the least likely person to be watching
@@ -308,7 +370,7 @@ router.post('/:bookingId/rating', authenticate, requireRole('USER'), asyncRoute(
 
 // ------------------------------------------------------- fare estimate
 router.post('/estimate', authenticate, asyncRoute(async (req, res) => {
-  const ambulance_type = v.oneOf(req.body.ambulance_type, v.AMBULANCE_TYPES, 'ambulance_type');
+  const ambulance_type = v.oneOf(req.body.ambulance_type, v.REQUEST_TYPES, 'ambulance_type');
   const distance_km = Number(req.body.distance_km);
   if (!Number.isFinite(distance_km) || distance_km < 0) {
     return res.status(400).json({ error: 'distance_km must be a non-negative number' });

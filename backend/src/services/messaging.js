@@ -22,7 +22,58 @@ const usingCloudApi = () => Boolean(config.whatsapp.token && config.whatsapp.pho
  * 24-hour customer service window, needs no approved template, and no billing
  * relationship with Meta.
  */
-const usingSmtp = () => Boolean(config.email.host && config.email.user);
+/**
+ * Which email transport is actually usable, decided once from what is
+ * configured rather than from what was asked for.
+ *
+ * Brevo wins when both are set, because its HTTP API works in places an
+ * outbound SMTP port does not - a hosted container among them. An explicit
+ * EMAIL_PROVIDER narrows the choice; it cannot conjure credentials that are
+ * absent, so a provider named without its key still falls back to the mock
+ * rather than failing every send at run time.
+ */
+function emailTransport() {
+  const wanted = config.email.provider;
+  const haveBrevo = Boolean(config.email.brevoApiKey);
+  const haveSmtp = Boolean(config.email.host && config.email.user);
+
+  if (wanted === 'mock') return 'mock';
+  if (wanted === 'brevo') return haveBrevo ? 'brevo' : 'mock';
+  if (wanted === 'smtp') return haveSmtp ? 'smtp' : 'mock';
+  if (haveBrevo) return 'brevo';
+  if (haveSmtp) return 'smtp';
+  return 'mock';
+}
+
+const usingSmtp = () => emailTransport() !== 'mock';
+
+/** Splits `Name <addr@host>` into Brevo's sender object. */
+function parseFrom(value) {
+  const m = String(value).match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  return m ? { name: m[1] || undefined, email: m[2] } : { email: String(value).trim() };
+}
+
+async function sendViaBrevo({ emailId, subject, body }) {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': config.email.brevoApiKey,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({
+      sender: parseFrom(config.email.from),
+      to: [{ email: emailId }],
+      subject,
+      textContent: body,
+    }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw Object.assign(new Error(json?.message || `Brevo returned ${res.status}`), { detail: json });
+  }
+  return json;
+}
 
 function toE164(phoneNo) {
   const digits = String(phoneNo).replace(/[^0-9]/g, '');
@@ -141,7 +192,7 @@ async function sendWhatsApp({ phoneNo, body, params, templateId, bookingId }) {
 // nodemailer builds a connection pool, so the transport is created once and
 // reused rather than per message.
 let mailer = null;
-function transport() {
+function smtp() {
   if (!mailer) {
     // Required here rather than at the top of the file so a deployment that
     // never sends email does not pay to load it.
@@ -162,33 +213,30 @@ function transport() {
  * rejects: a mail outage must not take a registration down with it.
  */
 async function sendEmail({ emailId, phoneNo, subject, body, templateId, bookingId }) {
-  if (!usingSmtp()) {
+  const via = emailTransport();
+  const log = (deliveryState, providerResponse) => record({
+    recipientPhone: phoneNo, recipientEmail: emailId, channel: 'EMAIL',
+    templateId, body, bookingId, deliveryState,
+    providerResponse: { transport: via, ...providerResponse },
+  });
+
+  if (via === 'mock') {
     console.log(`\n[email:mock -> ${emailId}] ${subject}\n${body}\n`);
-    return record({
-      recipientPhone: phoneNo, recipientEmail: emailId, channel: 'EMAIL',
-      templateId, body, bookingId, deliveryState: 'SENT',
-      providerResponse: { transport: 'mock' },
-    });
+    return log('SENT', {});
   }
+
   try {
-    const info = await transport().sendMail({
-      from: config.email.from,
-      to: emailId,
-      subject,
-      text: body,
+    if (via === 'brevo') {
+      const json = await sendViaBrevo({ emailId, subject, body });
+      return log('SENT', { messageId: json.messageId });
+    }
+    const info = await smtp().sendMail({
+      from: config.email.from, to: emailId, subject, text: body,
     });
-    return record({
-      recipientPhone: phoneNo, recipientEmail: emailId, channel: 'EMAIL',
-      templateId, body, bookingId, deliveryState: 'SENT',
-      providerResponse: { messageId: info.messageId, accepted: info.accepted },
-    });
+    return log('SENT', { messageId: info.messageId, accepted: info.accepted });
   } catch (err) {
-    console.error('[email] send failed:', err.message);
-    return record({
-      recipientPhone: phoneNo, recipientEmail: emailId, channel: 'EMAIL',
-      templateId, body, bookingId, deliveryState: 'FAILED',
-      providerResponse: { error: err.message },
-    });
+    console.error(`[email:${via}] send failed:`, err.message);
+    return log('FAILED', { error: err.message, detail: err.detail });
   }
 }
 
@@ -416,5 +464,5 @@ const templates = {
 
 module.exports = {
   sendWhatsApp, sendEmail, sendOtp, updateDeliveryState, templates,
-  usingCloudApi, usingSmtp, toE164, maskDestination,
+  usingCloudApi, usingSmtp, emailTransport, toE164, maskDestination, parseFrom,
 };

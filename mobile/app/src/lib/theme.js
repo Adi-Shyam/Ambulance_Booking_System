@@ -10,6 +10,10 @@ export const colors = {
   muted: '#93a4bb',
   accent: '#e63946',
   accentDark: '#c32f3b',
+  // Brighter and hotter than the accent, which is already red and is what a
+  // selected control looks like. An emergency has to read as different from
+  // "chosen", not merely as red.
+  danger: '#ff4d2d',
   ok: '#2ec27e',
   warn: '#f5a524',
   info: '#4c8dff',

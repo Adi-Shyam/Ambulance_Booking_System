@@ -5,6 +5,8 @@ import { useAuth } from '../../lib/auth';
 import { confirmAction } from '../../lib/confirm';
 import { colors, dateTimeOf, spacing } from '../../lib/theme';
 import { Banner, Body, Button, Card, Field, H2, Pill, Row, Small } from '../../components/ui';
+import NotificationInbox from '../../components/NotificationInbox';
+import AlertSettings from '../../components/AlertSettings';
 
 // The patient's own account. The notification inbox (F.14) is shared with the
 // driver and control-room screens rather than duplicated here.
@@ -86,13 +88,15 @@ export default function ProfileScreen() {
         )}
       </Card>
 
+      <AlertSettings title="Alerts" />
+
       <NotificationInbox title="Notifications" />
 
       <Card>
         <H2>About</H2>
         <View style={{ marginTop: spacing.sm }}>
           <Row label="Backend" value={api.url} />
-          <Row label="App" value="Patient app v1.0.0" />
+          <Row label="App" value="Ambulance Booking v1.0.0" />
         </View>
         <Small style={{ marginTop: spacing.sm }}>
           Ambulance Booking System · Team 16 · Department of Information Technology, NITK Surathkal

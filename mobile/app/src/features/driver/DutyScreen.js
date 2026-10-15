@@ -41,6 +41,10 @@ function normaliseOffer(o) {
     rank_score: o.rank_score,
     offer_expiry_timestamp: o.offer_expiry_timestamp,
     booking_timestamp: o.booking_timestamp,
+    // An emergency went to every ambulance nearby at once, so this one is not
+    // reserved for this driver. Saying so changes what they do with the 45
+    // seconds: hesitating costs them the job rather than delaying it.
+    broadcast: Boolean(o.broadcast),
   };
 }
 
@@ -110,8 +114,11 @@ export default function DutyScreen({ navigation }) {
     setOffers((prev) => [offer, ...prev.filter((o) => o.assignment_id !== offer.assignment_id)]);
   }, []);
 
-  useSocketEvent('offer:closed', ({ assignment_id }) => {
+  useSocketEvent('offer:closed', ({ assignment_id, result }) => {
     setOffers((prev) => prev.filter((o) => o.assignment_id !== assignment_id));
+    // On an emergency several drivers hold the same offer, so one of them will
+    // see their card vanish mid-countdown. Say why, or it looks like a fault.
+    if (result === 'TAKEN') setNotice('Another ambulance accepted that emergency first.');
   }, []);
 
   useSocketEvent('booking:cancelled', ({ booking_id, reason }) => {
@@ -408,14 +415,29 @@ export default function DutyScreen({ navigation }) {
         offers.map((offer) => {
           const left = secondsLeft(offer);
           return (
-            <Card key={offer.assignment_id} style={{ borderColor: colors.accent, borderWidth: 2 }}>
+            <Card
+              key={offer.assignment_id}
+              style={{
+                borderColor: offer.broadcast ? colors.danger : colors.accent,
+                borderWidth: offer.broadcast ? 3 : 2,
+              }}
+            >
               <View style={styles.headRow}>
-                <Pill label={`${offer.ambulance_type} REQUEST`} tone={colors.accent} />
+                <Pill
+                  label={offer.broadcast ? '🚨 EMERGENCY' : `${offer.ambulance_type} REQUEST`}
+                  tone={offer.broadcast ? colors.danger : colors.accent}
+                />
                 <View style={styles.countdown}>
                   <Text style={styles.countdownValue}>{left}</Text>
                   <Small style={typo.tiny}>sec</Small>
                 </View>
               </View>
+
+              {offer.broadcast ? (
+                <Small style={{ marginTop: spacing.sm, color: colors.danger, fontWeight: '700' }}>
+                  Sent to every ambulance nearby — first to accept takes it.
+                </Small>
+              ) : null}
 
               <H2 style={{ marginTop: spacing.sm }}>
                 {offer.address_text || `${offer.latitude}, ${offer.longitude}`}

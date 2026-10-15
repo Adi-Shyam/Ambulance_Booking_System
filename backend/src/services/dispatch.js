@@ -22,7 +22,17 @@ const maps = require('./maps');
 
 // Capability tiers: a higher-capability ambulance may serve a lower-tier
 // request when no exact match is free, but never the other way round.
-const TIER = { PTV: 1, BLS: 2, ALS: 3, ICU: 4 };
+//
+// EMG sits at 0 because it is not a vehicle class. It means "emergency, send
+// whatever is nearest", so every ambulance in range clears the floor and none
+// is turned away for being the wrong kind.
+const TIER = { EMG: 0, PTV: 1, BLS: 2, ALS: 3, ICU: 4 };
+
+// An emergency goes to everyone nearby at once rather than down the ranked
+// list one at a time. The cap exists so a dense city cannot turn one request
+// into hundreds of alerts; candidates are ranked, so it keeps the best.
+const BROADCAST_TYPES = new Set(['EMG']);
+const isBroadcast = (booking) => BROADCAST_TYPES.has(booking.ambulance_type);
 
 // In-process offer timers. A sweep on boot (see expireStaleOffers) covers the
 // case where the server restarts while offers are outstanding.
@@ -174,8 +184,111 @@ function alreadyTried(bookingId) {
 
 // ------------------------------------------------------- F.6 offer + alert
 /**
- * Offers the booking to the next best candidate. Returns the assignment row, or
- * null when no candidate is left (the booking is then marked FAILED).
+ * Everything a driver is told about one offer.
+ */
+function offerPayload({ booking, candidate, assignmentId, expiry, broadcast }) {
+  return {
+    assignment_id: assignmentId,
+    booking_id: booking.booking_id,
+    provider_id: candidate.provider_id,
+    ambulance_type: booking.ambulance_type,
+    pickup: {
+      latitude: booking.latitude,
+      longitude: booking.longitude,
+      address_text: booking.address_text,
+      landmark: booking.landmark,
+      pincode: booking.pincode,
+    },
+    drop: booking.drop_latitude
+      ? { latitude: booking.drop_latitude, longitude: booking.drop_longitude, address_text: booking.drop_address_text }
+      : null,
+    patient_name: booking.patient_name,
+    notes: booking.notes,
+    distance_km: candidate.distance_km,
+    rank_score: candidate.rank_score,
+    offer_expiry_timestamp: expiry,
+    expires_in_seconds: config.dispatch.offerTimeoutSeconds,
+    booking_timestamp: booking.booking_timestamp,
+    // True when this offer went to several ambulances at once, so the console
+    // can say "first to accept" rather than implying the job is already theirs.
+    broadcast: Boolean(broadcast),
+  };
+}
+
+/**
+ * Writes one OFFERED assignment and alerts that driver every way we have:
+ * socket, in-app inbox, push and WhatsApp. Shared by the sequential and the
+ * broadcast paths so the two cannot drift apart.
+ */
+function alertCandidate({ booking, candidate, broadcast }) {
+  const assignmentId = nextId('assignment');
+  const createdAt = nowIso();
+  const expiry = new Date(Date.now() + config.dispatch.offerTimeoutSeconds * 1000).toISOString();
+
+  db.prepare(
+    `INSERT INTO assignments (assignment_id, booking_id, provider_id, assignment_status,
+                              offer_expiry_timestamp, rank_score, distance_km, created_at)
+     VALUES (?, ?, ?, 'OFFERED', ?, ?, ?, ?)`
+  ).run(
+    assignmentId, booking.booking_id, candidate.provider_id, expiry,
+    candidate.rank_score, candidate.distance_km, createdAt
+  );
+
+  audit('DISPATCH_OFFER_SENT', {
+    entityType: 'assignment',
+    entityId: assignmentId,
+    details: {
+      booking_id: booking.booking_id,
+      provider_id: candidate.provider_id,
+      rank_score: candidate.rank_score,
+      distance_km: candidate.distance_km,
+      broadcast: Boolean(broadcast),
+    },
+  });
+
+  const payload = offerPayload({ booking, candidate, assignmentId, expiry, broadcast });
+
+  sockets.toProvider(candidate.provider_id, 'offer:new', payload);
+  notifications.notify(candidate.user_id, {
+    title: broadcast
+      ? `EMERGENCY - ${candidate.distance_km} km away`
+      : `New ${booking.ambulance_type} request`,
+    body: broadcast
+      ? `${booking.address_text || 'shared location'} - first to accept takes it`
+      : `Pickup: ${booking.address_text || 'shared location'} - ${candidate.distance_km} km away`,
+    eventType: 'OFFER',
+    bookingId: booking.booking_id,
+    // F.14 / "alerts should be real": a driver with the app closed is exactly
+    // the person this has to reach, so the offer goes out as a push too.
+    push: {
+      priority: 'high',
+      data: { type: 'OFFER', assignment_id: assignmentId, booking_id: booking.booking_id },
+    },
+  });
+
+  messaging
+    .sendWhatsApp({
+      phoneNo: candidate.phone_no,
+      bookingId: booking.booking_id,
+      templateId: config.whatsapp.templates.dispatch,
+      ...messaging.templates.dispatchAlert({
+        booking,
+        provider: candidate,
+        distanceKm: candidate.distance_km,
+        expirySeconds: config.dispatch.offerTimeoutSeconds,
+      }),
+    })
+    .catch((err) => console.error('[dispatch] whatsapp alert failed:', err.message));
+
+  scheduleTimeout(assignmentId, config.dispatch.offerTimeoutSeconds * 1000);
+  return { assignmentId, payload };
+}
+
+/**
+ * Offers the booking to the next best candidate, or - for an emergency - to
+ * every nearby ambulance at once. Returns the assignment row (the first one,
+ * when several went out), or null when no candidate is left; the booking is
+ * then marked FAILED.
  */
 async function offerNext(bookingId) {
   let booking = getBooking(bookingId);
@@ -191,90 +304,42 @@ async function offerNext(bookingId) {
     return failBooking(bookingId, 'No available ambulance matched this request');
   }
 
-  const chosen = candidates[0];
-  const assignmentId = nextId('assignment');
-  const createdAt = nowIso();
-  const expiry = new Date(Date.now() + config.dispatch.offerTimeoutSeconds * 1000).toISOString();
-
-  db.prepare(
-    `INSERT INTO assignments (assignment_id, booking_id, provider_id, assignment_status,
-                              offer_expiry_timestamp, rank_score, distance_km, created_at)
-     VALUES (?, ?, ?, 'OFFERED', ?, ?, ?, ?)`
-  ).run(assignmentId, bookingId, chosen.provider_id, expiry, chosen.rank_score, chosen.distance_km, createdAt);
+  const broadcast = isBroadcast(booking);
+  const chosen = broadcast
+    ? candidates.slice(0, config.dispatch.broadcastLimit)
+    : [candidates[0]];
 
   db.prepare(
     `UPDATE bookings SET booking_status = 'MATCHING', retry_count = retry_count + 1, updated_at = ?
      WHERE booking_id = ?`
-  ).run(createdAt, bookingId);
+  ).run(nowIso(), bookingId);
 
   booking = getBooking(bookingId);
 
-  audit('DISPATCH_OFFER_SENT', {
-    entityType: 'assignment',
-    entityId: assignmentId,
-    details: {
-      booking_id: bookingId,
-      provider_id: chosen.provider_id,
-      rank_score: chosen.rank_score,
-      distance_km: chosen.distance_km,
-      attempt: booking.retry_count,
-    },
-  });
+  const sent = chosen.map((candidate) => alertCandidate({ booking, candidate, broadcast }));
 
-  const offerPayload = {
-    assignment_id: assignmentId,
-    booking_id: bookingId,
-    provider_id: chosen.provider_id,
-    ambulance_type: booking.ambulance_type,
-    pickup: {
-      latitude: booking.latitude,
-      longitude: booking.longitude,
-      address_text: booking.address_text,
-      landmark: booking.landmark,
-      pincode: booking.pincode,
-    },
-    drop: booking.drop_latitude
-      ? { latitude: booking.drop_latitude, longitude: booking.drop_longitude, address_text: booking.drop_address_text }
-      : null,
-    patient_name: booking.patient_name,
-    notes: booking.notes,
-    distance_km: chosen.distance_km,
-    rank_score: chosen.rank_score,
-    offer_expiry_timestamp: expiry,
-    expires_in_seconds: config.dispatch.offerTimeoutSeconds,
-    booking_timestamp: booking.booking_timestamp,
-  };
-
-  // In-app notification and WhatsApp alert go out in parallel (F.6).
-  sockets.toProvider(chosen.provider_id, 'offer:new', offerPayload);
-  notifications.notify(chosen.user_id, {
-    title: `New ${booking.ambulance_type} request`,
-    body: `Pickup: ${booking.address_text || 'shared location'} - ${chosen.distance_km} km away`,
-    eventType: 'OFFER',
-    bookingId,
-  });
-  sockets.toAdmins('admin:dispatch', { ...offerPayload, event: 'OFFERED' });
-
-  messaging
-    .sendWhatsApp({
-      phoneNo: chosen.phone_no,
-      bookingId,
-      templateId: config.whatsapp.templates.dispatch,
-      ...messaging.templates.dispatchAlert({
-        booking,
-        provider: chosen,
-        distanceKm: chosen.distance_km,
-        expirySeconds: config.dispatch.offerTimeoutSeconds,
-      }),
-    })
-    .catch((err) => console.error('[dispatch] whatsapp alert failed:', err.message));
+  // The control room sees one entry per ambulance alerted, so a broadcast is
+  // visible as the fan-out it is rather than as a single mysterious offer.
+  for (const { payload } of sent) {
+    sockets.toAdmins('admin:dispatch', { ...payload, event: 'OFFERED' });
+  }
 
   broadcastBooking(booking);
-  scheduleTimeout(assignmentId, config.dispatch.offerTimeoutSeconds * 1000);
 
-  return db.prepare('SELECT * FROM assignments WHERE assignment_id = ?').get(assignmentId);
+  return db.prepare('SELECT * FROM assignments WHERE assignment_id = ?').get(sent[0].assignmentId);
 }
 
+/**
+ * How many offers on this booking are still live. A broadcast must not advance
+ * to the next round of candidates - or fail - while other drivers are still
+ * looking at the same request.
+ */
+function liveOffers(bookingId, excludeAssignmentId = null) {
+  return db.prepare(
+    `SELECT COUNT(*) AS n FROM assignments
+     WHERE booking_id = ? AND assignment_status = 'OFFERED' AND assignment_id <> ?`
+  ).get(bookingId, excludeAssignmentId || '').n;
+}
 function scheduleTimeout(assignmentId, ms) {
   clearTimeout(timers.get(assignmentId));
   const t = setTimeout(() => {
@@ -362,11 +427,27 @@ async function acceptOffer(assignmentId, providerId) {
     details: { assignment_id: assignmentId, trip_id: tripId, response_time_sec: responseSec },
   });
 
-  // Any other offers on this booking are void.
+  // Any other offers on this booking are void. On a broadcast there will be
+  // several, and each of those drivers has a live countdown on screen, so they
+  // are told rather than left watching an offer that has already gone.
+  const losers = db.prepare(
+    `SELECT assignment_id, provider_id FROM assignments
+     WHERE booking_id = ? AND assignment_status = 'OFFERED' AND assignment_id <> ?`
+  ).all(booking.booking_id, assignmentId);
+
   db.prepare(
     `UPDATE assignments SET assignment_status = 'TIMEOUT', response_timestamp = ?
      WHERE booking_id = ? AND assignment_status = 'OFFERED' AND assignment_id <> ?`
   ).run(ts, booking.booking_id, assignmentId);
+
+  for (const l of losers) {
+    clearTimeout(timers.get(l.assignment_id));
+    timers.delete(l.assignment_id);
+    sockets.toProvider(l.provider_id, 'offer:closed', {
+      assignment_id: l.assignment_id,
+      result: 'TAKEN',
+    });
+  }
 
   const provider = providerWithUser(assignment.provider_id);
 
@@ -390,6 +471,9 @@ async function acceptOffer(assignmentId, providerId) {
     body: `${provider.full_name} (${provider.vehicle_reg_no}) is on the way${etaMinutes ? `, ETA ${etaMinutes} min` : ''}.`,
     eventType: 'ASSIGNED',
     bookingId: booking.booking_id,
+    // The person who called for this is not watching a screen, they are
+    // watching the road.
+    push: { priority: 'high', data: { type: 'ASSIGNED', booking_id: booking.booking_id } },
   });
 
   const patient = db.prepare('SELECT phone_no FROM users WHERE user_id = ?').get(booking.user_id);
@@ -451,8 +535,13 @@ async function rejectOffer(assignmentId, providerId, reason = 'Declined by drive
     event: 'REJECTED', booking_id: assignment.booking_id, assignment_id: assignmentId, provider_id: providerId,
   });
 
-  // C.6: automatic reassignment to the next-best candidate.
-  await offerNext(assignment.booking_id);
+  // C.6: automatic reassignment to the next-best candidate - but only once
+  // nobody else is still holding an offer on this booking. One driver
+  // declining an emergency that went to six of them must not restart matching
+  // under the other five, nor fail a request they can still accept.
+  if (liveOffers(assignment.booking_id, assignmentId) === 0) {
+    await offerNext(assignment.booking_id);
+  }
   return { assignment_id: assignmentId, status: 'REJECTED' };
 }
 
@@ -481,6 +570,9 @@ async function timeoutOffer(assignmentId) {
     event: 'TIMEOUT', booking_id: assignment.booking_id, assignment_id: assignmentId, provider_id: assignment.provider_id,
   });
 
+  // As with a decline: wait for the last live offer on this booking before
+  // moving on, so a broadcast runs its full 45 seconds for everyone.
+  if (liveOffers(assignment.booking_id, assignmentId) > 0) return null;
   return offerNext(assignment.booking_id);
 }
 
@@ -497,6 +589,8 @@ function failBooking(bookingId, reason) {
     body: `${reason}. Please try again or call 108.`,
     eventType: 'FAILED',
     bookingId,
+    // The worst thing this system can do is fail quietly (NF.1).
+    push: { priority: 'high', data: { type: 'FAILED', booking_id: bookingId } },
   });
 
   // The patient is waiting on an ambulance that is not coming, and may well not
@@ -532,6 +626,7 @@ function resumePendingOffers() {
 }
 
 module.exports = {
+  isBroadcast,
   findCandidates,
   offerNext,
   acceptOffer,

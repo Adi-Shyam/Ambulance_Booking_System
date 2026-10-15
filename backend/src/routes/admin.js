@@ -91,7 +91,7 @@ router.get('/providers', asyncRoute(async (req, res) => {
   }
   if (req.query.ambulance_type) {
     filters.push('p.ambulance_type = ?');
-    params.push(v.oneOf(req.query.ambulance_type, v.AMBULANCE_TYPES, 'ambulance_type'));
+    params.push(v.oneOf(req.query.ambulance_type, v.REQUEST_TYPES, 'ambulance_type'));
   }
   if (req.query.availability_status) {
     filters.push('p.availability_status = ?');
@@ -205,7 +205,7 @@ router.get('/bookings', asyncRoute(async (req, res) => {
   }
   if (req.query.ambulance_type) {
     filters.push('b.ambulance_type = ?');
-    params.push(v.oneOf(req.query.ambulance_type, v.AMBULANCE_TYPES, 'ambulance_type'));
+    params.push(v.oneOf(req.query.ambulance_type, v.REQUEST_TYPES, 'ambulance_type'));
   }
   if (req.query.from_date) {
     filters.push(`${localDay('b.booking_timestamp')} >= ?`);

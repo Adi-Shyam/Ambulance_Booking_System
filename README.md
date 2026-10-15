@@ -124,6 +124,33 @@ To see automatic reassignment (F.7): put two drivers on duty, book, and **declin
 the first offer — the request moves to the next-best ambulance on its own. Ignoring
 the offer for 45 seconds does the same thing.
 
+## The five request types
+
+| Code | Means | Dispatch |
+|---|---|---|
+| `PTV` | Patient transport | Ranked list, one offer at a time |
+| `BLS` | Basic life support | Ranked list, one offer at a time |
+| `ALS` | Advanced life support | Ranked list, one offer at a time |
+| `ICU` | Mobile ICU | Ranked list, one offer at a time |
+| `EMG` | **Emergency — send anything** | **Every ambulance in range, all at once** |
+
+`EMG` is deliberately not a vehicle class, and no provider can register as one.
+"Emergency" describes what the caller needs, not what is parked outside the
+hospital — which is also what makes "offer it to everybody" coherent. Two rules
+follow from that:
+
+- **Every class is eligible.** A PTV may not serve an ICU request, because care
+  level must never be downgraded. An emergency has no such floor: the nearest
+  ambulance is better than the right ambulance later.
+- **They are alerted together, not in turn.** The ranked list still decides who
+  is asked, but all of them are asked at the same moment and the first to accept
+  takes it. The rest have their offer closed and are told why, rather than
+  watching a countdown on a job that has gone. `BROADCAST_LIMIT` caps the
+  fan-out so one request in a dense area cannot produce hundreds of alerts.
+
+The control room sees the fan-out as what it is — one row per ambulance
+alerted, with its rank — rather than as a single mysterious offer.
+
 ## How the dispatch engine works
 
 `backend/src/services/dispatch.js` is the heart of the system.
@@ -230,6 +257,74 @@ to state the amount.
 
 Because it sums straight-line hops between fixes, the odometer slightly under-reads
 true road distance, and the gap narrows as the ping interval shortens.
+
+## Alerts and calling
+
+**Push notifications** are the only channel that reaches a phone whose app is
+closed, which makes them the one that decides whether a dispatch offer is seen
+at all — everything else in the app assumes somebody is looking. The socket
+needs the app open; the inbox needs the screen on; a driver waiting for work is
+doing neither, and an offer expires in 45 seconds.
+
+They go through Expo's push service, which needs no credentials: the device
+token is both the address and the authorisation. The app registers on every
+sign-in rather than once on install, because a token can rotate and has to
+follow whoever is signed in on that handset — and it unregisters on sign-out,
+so a shared phone stops delivering the previous driver's offers.
+
+Android decides whether a notification may interrupt by its *channel*, not by
+the message, so there are two: `dispatch` can break through Do Not Disturb, and
+`default` cannot. Each role's profile screen has a **Send a test alert** button,
+because the way this fails is silent — notifications were declined months ago,
+nothing looks broken, and offers simply never arrive.
+
+Set `PUSH_MOCK=true` to log and record alerts without calling Expo. The test
+suite does this, so running the tests sends nothing.
+
+**Calling** is a handoff to the phone's own dialer, not voice carried in the
+app. A crew who cannot find a patient, and a patient watching an ambulance go
+past the turning, both need a call that works on a weak signal, with the app in
+the background, and without this server being reachable. Carrying voice in-app
+would be a worse answer to that problem — which is why the real 108 service,
+and every ride-hailing app, does the same thing.
+
+What the server owes them is the number, and `POST /api/bookings/:id/call`
+releases it only between the two parties of a live booking and writes every
+release to the audit trail (C.5). Number masking through a relay provider would
+be the production refinement; it needs a paid Indian number.
+
+## Deploying to Render
+
+Deploying is worth doing for a reason beyond tidiness: it ends the LAN-address
+problem. With the API on a fixed public URL the APK no longer has to be told
+which Wi-Fi it is on, and a demonstration stops depending on two phones and a
+laptop sharing a network.
+
+`render.yaml` in the repository root is a Render blueprint. Push it, then in the
+Render dashboard choose **New → Blueprint** and point it at this repository.
+Render reads the file and creates the service; set `BREVO_API_KEY` in the
+dashboard rather than in the file, which is in version control.
+
+Then point the app at it and rebuild:
+
+```bash
+# in mobile/app/eas.json, set apk-hosted's EXPO_PUBLIC_API_URL to the
+# https://<service>.onrender.com address Render gives you, then:
+eas build --platform android --profile apk-hosted
+```
+
+Two things about the free plan to know before demo day, neither of which is a
+fault in the code:
+
+- **The filesystem is ephemeral.** It is rebuilt on every deploy and every wake
+  from idle, and the SQLite file goes with it. The app seeds itself on boot so
+  it always comes back usable — fare rules, demo accounts, an administrator —
+  but bookings made before a restart will not be there. To keep data, move to a
+  paid instance and uncomment the disk block in `render.yaml`; the database path
+  already comes from the environment, so no code changes.
+- **The service sleeps after 15 minutes idle**, and the next request waits
+  roughly 50 seconds while it wakes. Open the `/health` URL a minute before
+  presenting and it will be warm.
 
 ## Configuration
 

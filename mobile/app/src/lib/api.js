@@ -124,4 +124,6 @@ export const api = {
   get: (p) => request('GET', p),
   post: (p, b) => request('POST', p, b),
   patch: (p, b) => request('PATCH', p, b),
+  // Named `del` because `delete` is a reserved word.
+  del: (p, b) => request('DELETE', p, b),
 };

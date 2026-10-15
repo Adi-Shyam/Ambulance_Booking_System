@@ -10,7 +10,12 @@ const VEHICLE_RE = /^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/;
 const PINCODE_RE = /^[0-9]{6}$/;
 
 const ROLE_CODES = ['USER', 'DRIVER', 'ORG', 'ADMIN'];
+// What a vehicle can be registered as.
 const AMBULANCE_TYPES = ['BLS', 'ALS', 'ICU', 'PTV'];
+// What a patient can ask for. EMG is a request, not a vehicle class: it means
+// "emergency, send whatever is nearest", so no provider ever registers as one
+// and every ambulance in range is eligible to answer it.
+const REQUEST_TYPES = [...AMBULANCE_TYPES, 'EMG'];
 const AVAILABILITY = ['AVAILABLE', 'BUSY', 'OFFLINE'];
 const VERIFICATION = ['PENDING', 'VERIFIED', 'REJECTED', 'SUSPENDED'];
 const BOOKING_STATUS = [
@@ -115,7 +120,7 @@ module.exports = {
   ValidationError,
   required, phone, name, email, password, oneOf, coordinate,
   vehicleRegNo, pincode, rating, text,
-  ROLE_CODES, AMBULANCE_TYPES, AVAILABILITY, VERIFICATION, BOOKING_STATUS,
+  ROLE_CODES, AMBULANCE_TYPES, REQUEST_TYPES, AVAILABILITY, VERIFICATION, BOOKING_STATUS,
   ASSIGNMENT_STATUS, TRIP_MILESTONES, PAYMENT_MODES, PAYMENT_STATUS,
   MESSAGE_CHANNELS, DELIVERY_STATES, REPORT_TYPES,
 };

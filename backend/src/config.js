@@ -28,6 +28,10 @@ const config = {
     maxRetries: int(process.env.MAX_DISPATCH_RETRIES, 5),
     searchRadiusKm: int(process.env.SEARCH_RADIUS_KM, 15),
     providerStaleMinutes: int(process.env.PROVIDER_STALE_MINUTES, 15),
+    // An EMG request is offered to every nearby ambulance at once. The cap
+    // bounds one request to a sane number of alerts in a dense area; the
+    // candidates are ranked first, so the cap keeps the best of them.
+    broadcastLimit: int(process.env.BROADCAST_LIMIT, 10),
   },
 
   // Recovery sweep (NF.1: a request must not be left unserved; C.6: driver
@@ -59,12 +63,30 @@ const config = {
     countryCode: process.env.DEFAULT_COUNTRY_CODE || '91',
   },
 
+  // F.14 - Expo push. Nothing is required for a project using Expo's own push
+  // service: the device token is both the address and the authorisation. Set
+  // EXPO_ACCESS_TOKEN only once push security is enabled for the project.
+  push: {
+    accessToken: process.env.EXPO_ACCESS_TOKEN || '',
+    // Push has no credentials to detect, so unlike WhatsApp and email the mock
+    // has to be asked for. Tests set it so the suite makes no outbound call,
+    // and it lets a demo show the alert log without a real handset.
+    mock: bool(process.env.PUSH_MOCK, false),
+  },
+
   // Verification codes by email (F.1). Phone stays the account identifier - the
   // data dictionary makes phone_no NOT NULL UNIQUE and the driver has to be
   // able to ring the patient - so this is a delivery channel, not an identity.
   // Leave EMAIL_HOST empty to run the mock transport, which logs the code and
   // writes the same `messages` row the SMTP path does.
   email: {
+    // brevo | smtp | mock. Resolved rather than read raw: naming a provider
+    // whose credentials are absent would otherwise fail every send silently
+    // at run time instead of being obvious at boot.
+    provider: (process.env.EMAIL_PROVIDER || '').toLowerCase(),
+    // Brevo's HTTP API. Preferred over SMTP for a hosted deployment, because
+    // an outbound HTTPS call works everywhere an SMTP port may not.
+    brevoApiKey: process.env.BREVO_API_KEY || '',
     host: process.env.EMAIL_HOST || '',
     port: int(process.env.EMAIL_PORT, 587),
     // Port 465 is implicit TLS; 587 upgrades with STARTTLS, which nodemailer

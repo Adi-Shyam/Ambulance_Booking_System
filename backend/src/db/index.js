@@ -46,40 +46,85 @@ const COLUMN_ADDITIONS = [
 // `otps.channel` is not here: adding a column *with* a CHECK is allowed, so
 // COLUMN_ADDITIONS handles that one.
 function widenCheckConstraints() {
+  // EMG joined the request types when emergency dispatch arrived. It is a
+  // request, not a vehicle class, so `providers.ambulance_type` is untouched:
+  // an emergency is served by whatever is nearest, whatever it is.
+  rebuildTable({
+    table: 'bookings',
+    needsRebuild: (ddl) => ddl.includes("ambulance_type IN ('BLS','ALS','ICU','PTV')"),
+    createSql: ddlFromSchema('bookings', 'bookings_migrated'),
+    indexes: [
+      'CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id, booking_timestamp DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(booking_status)',
+    ],
+  });
+
+  rebuildTable({
+    table: 'fare_rules',
+    needsRebuild: (ddl) => ddl.includes("ambulance_type IN ('BLS','ALS','ICU','PTV')"),
+    createSql: ddlFromSchema('fare_rules', 'fare_rules_migrated'),
+  });
+
   // EMAIL joined WHATSAPP/PUSH/SMS when verification codes gained an email
   // channel (F.1). Databases created before that reject the insert outright.
   rebuildTable({
     table: 'messages',
     needsRebuild: (ddl) => !ddl.includes("'EMAIL'"),
-    createSql: `CREATE TABLE messages_migrated (
-      message_id          TEXT PRIMARY KEY,
-      booking_id          TEXT REFERENCES bookings(booking_id),
-      recipient_phone     TEXT NOT NULL,
-      recipient_email     TEXT,
-      message_channel     TEXT NOT NULL CHECK (message_channel IN ('WHATSAPP','PUSH','SMS','EMAIL')),
-      message_template_id TEXT,
-      body                TEXT,
-      delivery_state      TEXT NOT NULL DEFAULT 'SENT'
-                          CHECK (delivery_state IN ('SENT','DELIVERED','READ','FAILED')),
-      delivery_timestamp  TEXT,
-      provider_response   TEXT,
-      created_at          TEXT NOT NULL
-    )`,
+    createSql: ddlFromSchema('messages', 'messages_migrated'),
     indexes: ['CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC)'],
   });
+}
+
+/**
+ * Lifts one `CREATE TABLE` statement out of schema.sql and renames it.
+ *
+ * A rebuild has to state the shape it is building, and writing that shape out
+ * a second time here is how the two drift apart: widen a constraint in
+ * schema.sql, forget to widen the copy, and a database that rebuilds ends up
+ * with neither the old shape nor the new one. Reading the declaration back
+ * means there is only ever one.
+ */
+function ddlFromSchema(table, newName) {
+  const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+  const head = `CREATE TABLE IF NOT EXISTS ${table} (`;
+  const from = schema.indexOf(head);
+  if (from === -1) throw new Error(`ddlFromSchema: no CREATE TABLE for ${table} in schema.sql`);
+
+  // Every table in this file closes with `);` at the start of a line, so the
+  // first such sequence after the header ends this statement.
+  const bodyStart = from + head.length;
+  const to = schema.indexOf('\n);', bodyStart);
+  if (to === -1) throw new Error(`ddlFromSchema: ${table} is not closed by ");" in schema.sql`);
+
+  return `CREATE TABLE ${newName} (${schema.slice(bodyStart, to)}\n)`;
 }
 
 /**
  * Replaces `table` with `createSql`, carrying over every column the two shapes
  * share. Columns new to the rebuilt table keep their default, which is how
  * `recipient_email` arrives populated with NULL rather than failing the copy.
+ *
+ * This is SQLite's documented procedure for altering a table, and the order
+ * matters. Foreign keys are suspended for the duration, because dropping
+ * `bookings` while `assignments`, `trips`, `invoices`, `messages` and
+ * `notifications` all reference it is a violation however briefly it holds;
+ * the pragma cannot be changed inside a transaction, so it goes outside.
+ * `legacy_alter_table` stops the rename rewriting other tables' references to
+ * point at the temporary name.
+ *
+ * `foreign_key_check` then runs *before* the commit, so a rebuild that would
+ * have orphaned a row rolls back with the old table still in place rather than
+ * leaving the database half-migrated.
  */
 function rebuildTable({ table, needsRebuild, createSql, indexes = [] }) {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
   if (!row || !needsRebuild(row.sql)) return;
 
   const before = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
+  const fkWasOn = db.prepare('PRAGMA foreign_keys').get().foreign_keys === 1;
 
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec('PRAGMA legacy_alter_table = ON');
   db.exec('BEGIN');
   try {
     db.exec(`DROP TABLE IF EXISTS ${table}_migrated`);
@@ -98,10 +143,21 @@ function rebuildTable({ table, needsRebuild, createSql, indexes = [] }) {
     db.exec(`DROP TABLE ${table}`);
     db.exec(`ALTER TABLE ${table}_migrated RENAME TO ${table}`);
     for (const sql of indexes) db.exec(sql);
+
+    const orphans = db.prepare('PRAGMA foreign_key_check').all();
+    if (orphans.length) {
+      throw new Error(
+        `rebuilding ${table} would orphan ${orphans.length} row(s), e.g. in ${orphans[0].table}`
+      );
+    }
+
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
+  } finally {
+    db.exec('PRAGMA legacy_alter_table = OFF');
+    if (fkWasOn) db.exec('PRAGMA foreign_keys = ON');
   }
 
   const after = db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
@@ -125,6 +181,10 @@ function seedFareRules() {
     ['ALS', 900, 30, 400, 'Advanced Life Support', 'Ventilator, defibrillator and paramedic'],
     ['ICU', 1500, 40, 900, 'Mobile ICU', 'Critical-care setup with monitoring equipment'],
     ['PTV', 350, 16, 0, 'Patient Transport', 'Non-emergency transfer between facilities'],
+    // Priced for priority dispatch rather than for a vehicle class, because an
+    // emergency request is served by whatever is nearest. Billing instead at
+    // the responding vehicle's rate would be the production refinement.
+    ['EMG', 800, 28, 300, 'Emergency', 'Nearest available ambulance, alerted all at once'],
   ];
   const stmt = db.prepare(
     `INSERT INTO fare_rules (ambulance_type, base_fare, per_km_rate, type_surcharge, label, description)

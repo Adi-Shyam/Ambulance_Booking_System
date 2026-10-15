@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { api, clearToken, loadBaseUrl, loadToken, saveToken, setUnauthorizedHandler } from './api';
+import { registerForPush, unregisterPush } from './push';
 import { connectSocket, disconnectSocket } from './socket';
 import { modeForRoleCode, roleFor } from './config';
 
@@ -76,6 +77,14 @@ export function AuthProvider({ children }) {
     setProvider(session.provider || null);
     setMode(modeForRoleCode(actual));
     connectSocket();
+
+    // Register this handset for push every time somebody signs in, not once
+    // on install: the token has to follow whoever is actually signed in here,
+    // and it can rotate. Deliberately not awaited - a driver should not wait
+    // on a permission dialog to reach their console, and a refusal is not an
+    // error worth surfacing at sign-in.
+    registerForPush().catch(() => {});
+
     return session.user;
   }
 
@@ -148,6 +157,11 @@ export function AuthProvider({ children }) {
       },
 
       async signOut() {
+        // Before the token is revoked, while the request can still be
+        // authorised: a shared phone must not keep delivering this driver's
+        // dispatch offers to whoever picks it up next.
+        await unregisterPush();
+
         // Revoke server-side first; clearing the token locally alone would leave
         // a usable token in existence for the rest of its 24 hours.
         await api.post('/api/auth/logout', {}).catch(() => {});

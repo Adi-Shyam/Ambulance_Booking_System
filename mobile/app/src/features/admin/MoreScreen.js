@@ -5,6 +5,7 @@ import { confirmAction } from '../../lib/confirm';
 import { colors, radius, spacing } from '../../lib/theme';
 import { Body, Button, Card, H2, Small } from '../../components/ui';
 import NotificationInbox from '../../components/NotificationInbox';
+import AlertSettings from '../../components/AlertSettings';
 
 /**
  * The control room has more screens than a phone has room for tabs, so the
@@ -41,6 +42,8 @@ export default function MoreScreen({ navigation }) {
           <Text style={{ color: colors.muted, fontSize: 20 }}>›</Text>
         </Pressable>
       ))}
+
+      <AlertSettings title="Alerts" />
 
       <NotificationInbox title="Control room notifications" />
 

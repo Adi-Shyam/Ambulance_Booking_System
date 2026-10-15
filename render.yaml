@@ -1,0 +1,84 @@
+# Render blueprint for the Ambulance Booking System backend.
+#
+# Deploying matters for a reason beyond tidiness: it ends the LAN-address
+# problem. With the API on a fixed public URL the APK no longer has to be told
+# which Wi-Fi it is on, and a demo stops depending on two phones and a laptop
+# sharing a network.
+#
+# To use it: push this file, then in the Render dashboard choose
+# New -> Blueprint and point it at this repository. Render reads this file and
+# creates the service. Set BREVO_API_KEY in the dashboard rather than here.
+
+services:
+  - type: web
+    name: ambulance-booking-api
+    runtime: node
+    plan: free
+    region: singapore          # nearest region to India
+    rootDir: backend
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+
+    # Render restarts the service if this stops answering. /health reports the
+    # row counts, so a database that came back empty is visible rather than
+    # silently serving an empty fleet.
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Render provides PORT; the app already reads it.
+
+      - key: JWT_SECRET
+        generateValue: true     # a fresh secret Render keeps to itself
+
+      # The browser build of the app and any other origin that needs to reach
+      # this API. Narrow it once the app's own URL is known.
+      - key: CORS_ORIGIN
+        value: '*'
+
+      # A verification code is a credential. Exposing it in the response is a
+      # development convenience and must not survive into a deployment.
+      - key: EXPOSE_OTP_IN_RESPONSE
+        value: 'false'
+
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: EMAIL_FROM
+        value: Ambulance Booking System <no-reply@nitk.ac.in>
+
+      # Set in the dashboard, not here: this file is in version control.
+      - key: BREVO_API_KEY
+        sync: false
+
+      - key: MAPS_PROVIDER
+        value: osm
+      - key: GEO_CONTACT_EMAIL
+        value: team16@nitk.edu.in
+
+      - key: PAYMENT_PROVIDER
+        value: mock
+
+      - key: REPORT_UTC_OFFSET
+        value: '+05:30'
+
+    # --- persistence ---------------------------------------------------
+    # A free web service has an ephemeral filesystem: it is rebuilt on every
+    # deploy and every wake from idle, and the SQLite file goes with it. The
+    # app seeds itself on boot so it always comes back usable, but bookings
+    # made before a restart will not be there.
+    #
+    # That is acceptable for a demonstration and is why this is left as the
+    # default. To keep data instead, move to a paid instance type and uncomment
+    # the disk below along with the DB_FILE variable - no code change is needed,
+    # since the database path is already read from the environment.
+    #
+    # disk:
+    #   name: data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    #
+    # and add to envVars:
+    #   - key: DB_FILE
+    #     value: /var/data/ambulance.db

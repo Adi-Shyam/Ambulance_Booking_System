@@ -259,6 +259,11 @@ router.get('/offers', requireProvider, asyncRoute(async (req, res) => {
         0,
         Math.round((new Date(r.offer_expiry_timestamp).getTime() - Date.now()) / 1000)
       ),
+      // The socket payload says this too. A console that reloaded, or came
+      // back from the background, reads the list instead - and still has to
+      // be able to say "first to accept" rather than implying the job is
+      // already theirs.
+      broadcast: dispatch.isBroadcast(r),
     })),
   });
 }));
@@ -401,6 +406,11 @@ router.post('/trips/:tripId/status', requireProvider, asyncRoute(async (req, res
     body: messaging.templates.statusUpdate({ booking, milestone: trip_milestone, etaMinutes: trip.eta_minutes }).body,
     eventType: trip_milestone,
     bookingId: trip.booking_id,
+    // ARRIVED is the one the patient has to act on - the ambulance is outside
+    // and nobody is looking at the app.
+    push: trip_milestone === 'ARRIVED'
+      ? { priority: 'high', data: { type: 'ARRIVED', booking_id: trip.booking_id } }
+      : null,
   });
 
   const patient = db.prepare('SELECT phone_no FROM users WHERE user_id = ?').get(booking.user_id);

@@ -8,6 +8,7 @@ import { confirmAction } from '../../lib/confirm';
 import { colors, dateTimeOf, money, spacing } from '../../lib/theme';
 import { Banner, Button, Card, H2, Loading, Pill, Row, Small } from '../../components/ui';
 import NotificationInbox from '../../components/NotificationInbox';
+import AlertSettings from '../../components/AlertSettings';
 
 /** The vehicle record in D2, its verification state, and the way out. */
 export default function ProfileScreen() {
@@ -100,6 +101,9 @@ export default function ProfileScreen() {
           </View>
         </Card>
       ) : null}
+
+      <AlertSettings title="Dispatch alerts" />
+
 
       <NotificationInbox title="Notifications" />
 

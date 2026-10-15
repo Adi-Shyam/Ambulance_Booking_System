@@ -246,21 +246,38 @@ export default function BookScreen({ navigation }) {
 
         {AMBULANCE_TYPES.map((t) => {
           const selected = ambulanceType === t.code;
-          const count = nearby.filter((a) => a.ambulance_ambulanceType === t.code).length;
+          // An emergency can be answered by any class, so its count is every
+          // ambulance nearby rather than the ones of one kind.
+          const count = t.urgent
+            ? nearby.length
+            : nearby.filter((a) => a.ambulance_type === t.code).length;
           return (
             <Pressable
               key={t.code}
               onPress={() => setAmbulanceType(t.code)}
-              style={[styles.typeCard, selected && styles.typeCardActive]}
+              style={[
+                styles.typeCard,
+                t.urgent && styles.typeCardUrgent,
+                selected && styles.typeCardActive,
+                selected && t.urgent && styles.typeCardUrgentActive,
+              ]}
             >
               <Text style={{ fontSize: 26 }}>{t.icon}</Text>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontWeight: '600', color: selected ? colors.white : colors.text }}>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontWeight: t.urgent ? '800' : '600',
+                    color: selected ? colors.white : t.urgent ? colors.danger : colors.text,
+                  }}
+                >
                   {t.code} · {t.label}
                 </Text>
-                <Small numberOfLines={1}>{t.hint}</Small>
+                <Small numberOfLines={2}>{t.hint}</Small>
               </View>
-              {count > 0 ? <Pill label={`${count} free`} tone={colors.ok} /> : null}
+              {count > 0 ? (
+                <Pill label={`${count} free`} tone={t.urgent ? colors.danger : colors.ok} />
+              ) : null}
             </Pressable>
           );
         })}
@@ -364,6 +381,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   typeCardActive: { borderColor: colors.accent, backgroundColor: colors.surface2 },
+  // An emergency is not a considered choice between care levels, so it does
+  // not look like one.
+  typeCardUrgent: { borderColor: colors.danger, borderWidth: 1.5 },
+  typeCardUrgentActive: { borderColor: colors.danger, backgroundColor: colors.surface2 },
   fareRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
   divider: { height: 1, backgroundColor: colors.line, marginVertical: spacing.sm },
 });

@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Linking, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { callCounterparty } from '../../lib/calling';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
@@ -170,15 +171,22 @@ export default function TripScreen({ navigation }) {
           {trip.notes ? <Row label="Notes" value={trip.notes} /> : null}
           <Row label="Requested" value={dateTimeOf(trip.booking_timestamp)} />
         </View>
-        {trip.patient?.phone_no ? (
-          <Button
-            title={`Call ${trip.patient.phone_no}`}
-            icon="📞"
-            variant="secondary"
-            style={{ marginTop: spacing.md }}
-            onPress={() => Linking.openURL(`tel:${trip.patient.phone_no}`)}
-          />
-        ) : null}
+        {/*
+          The crew's own reason to call is almost always "we are outside and
+          cannot see you", so this sits with the patient's details rather than
+          buried under the milestone buttons.
+        */}
+        <Button
+          title={`Call ${trip.patient?.full_name || 'the patient'}`}
+          icon="📞"
+          variant="secondary"
+          style={{ marginTop: spacing.md }}
+          onPress={() =>
+            callCounterparty(trip.booking_id).catch((e) =>
+              Alert.alert('Could not place the call', e.message)
+            )
+          }
+        />
       </Card>
 
       {/* ------------------------------------------------- F.9 milestones */}

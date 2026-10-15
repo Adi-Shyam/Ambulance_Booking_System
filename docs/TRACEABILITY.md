@@ -11,8 +11,8 @@ specification item can be checked against its implementation.
 | F.2 | Role-based login | 0.1.2 Authenticate Credentials, 0.1.3 Create Session & Assign Role | `routes/auth.js` `/login`, `middleware/auth.js` `requireRole` | Mode chosen per app; dashboard is ADMIN-only |
 | F.3 | Select ambulance type and place booking | 0.2.1 Capture Type & Pickup, 0.2.3 Create Booking Record | `routes/bookings.js` `POST /api/bookings` | `BookScreen` |
 | F.4 | Capture pickup location | 0.2.2 Resolve & Validate Location | `services/maps.js`, `routes/geo.js` | GPS, map pin, address search |
-| F.5 | Match nearest available ambulance | 0.3.1 Find & Rank Providers | `services/dispatch.js` `findCandidates` | — (server side) |
-| F.6 | Notify driver via WhatsApp | 0.3.2 Notify Provider & Await Reply | `services/messaging.js`, `dispatch.offerNext` | Driver `DutyScreen`; dashboard *Alert log* |
+| F.5 | Match nearest available ambulance | 0.3.1 Find & Rank Providers | `services/dispatch.js` `findCandidates`; an `EMG` request clears the tier floor so every class is eligible | Emergency option on `BookScreen` |
+| F.6 | Notify driver via WhatsApp | 0.3.2 Notify Provider & Await Reply | `services/messaging.js`, `dispatch.offerNext` / `alertCandidate`; an `EMG` request alerts every candidate at once, first accept wins | Driver `DutyScreen` with a broadcast badge; dashboard *Alert log* |
 | F.7 | Accept or reject a request | 0.3.2, 0.3.3 Confirm Assignment | `dispatch.acceptOffer` / `rejectOffer` / `timeoutOffer` | Driver offer card with countdown |
 | F.8 | Live tracking and ETA | 0.4.2 Calculate ETA & Route | `routes/provider.js` `/location`, `routes/bookings.js` `/track` | Patient `TrackScreen`; dashboard *Fleet map* |
 | F.9 | Trip status updates | 0.4.1 Receive GPS & Status, 0.4.3 Publish Status & Alerts | `routes/provider.js` `/trips/:id/status` | Driver `TripScreen` → patient milestone trail |
@@ -20,7 +20,7 @@ specification item can be checked against its implementation.
 | F.11 | Booking history and records | 0.5.3 Record History & Feedback | `GET /api/bookings`, `GET /api/provider/trips` | `HistoryScreen`, `EarningsScreen` |
 | F.12 | Rating and feedback | 0.5.3 Record History & Feedback | `routes/bookings.js` `POST /:id/rating` | Star rating on a completed trip |
 | F.13 | Administrative management | 0.6.1 Verify & Manage Providers, 0.6.2 Monitor Bookings, 0.6.3 Reports & Analytics | `routes/admin.js` | Whole dashboard |
-| F.14 | Notifications and alerts | 0.3.2, 0.4.3, 0.6.3 | `services/notifications.js` + `messaging.js` | In-app inbox + WhatsApp |
+| F.14 | Notifications and alerts | 0.3.2, 0.4.3, 0.6.3 | `services/notifications.js`, `messaging.js`, `push.js` | In-app inbox, WhatsApp, email, and Expo push for a closed app; `AlertSettings` to verify delivery |
 
 ## Data stores
 
@@ -92,6 +92,9 @@ Each is pinned by a regression test in `backend/tests/api.test.js` or `backend/t
 | NF.3 | Sign-in and OTP verification accepted unlimited attempts, leaving a six-digit code exhaustible. | Per-account rate limits on sign-in, OTP issue and OTP verification. |
 | F.1 | `/otp/verify` consumed the code before checking whether a name was needed, so the screen's two-step registration — verify, be asked for a name, verify again — always failed the second step. Registering from the app was impossible however correct the code was. | Everything that can refuse the request is settled before the code is marked consumed. |
 | F.1 | The app requested codes with no `purpose`, which defaults to `LOGIN`, and `LOGIN` refuses a number with no account. Registration by code was reachable over the API and never from the app. | The client asks for `REGISTER`, which is what a screen serving both sign-in and sign-up needs. |
+| F.14 | The patient's Account tab rendered `<NotificationInbox>` without importing it, so opening it threw "Element type is invalid". The file compiled, so nothing caught it until the tab was opened. | Import added, and a check that every JSX component in the app is imported or declared. |
+| F.3 | The booking screen counted available ambulances per type against `a.ambulance_ambulanceType`, a field that does not exist, so the "N free" badge never appeared. | Reads `ambulance_type`, which is what the endpoint returns. |
+| F.6 / C.5 | The call buttons dialled a number already in the tracking payload, so a driver's and a patient's number were disclosed to each other with no record of it. | The number is released by `POST /api/bookings/:id/call`, only between the parties of a live booking, and the release is audited. |
 | F.7 / C.6 | Accept, decline and expiry each read the assignment state and then wrote it, so two simultaneous responses could both pass the check. | All three transitions are conditional updates that verify a row actually changed. |
 | NF.1 / C.6 | A driver who accepted and then went silent left the booking in ASSIGNED for ever: the patient watched a frozen ETA and the ambulance was held BUSY permanently. Nothing swept for it. | A recovery sweep retires stale providers, flags stalled trips to the patient and control room, and re-offers bookings left mid-match. |
 | C.6 / F.13 | "Available" was defined three different ways, so the dashboard could report ambulances free that the matcher would never consider. | One predicate in `services/availability.js`, used by the matcher, the dashboard and the patient view; stale providers are reported separately. |

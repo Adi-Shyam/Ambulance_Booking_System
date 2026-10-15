@@ -84,7 +84,23 @@ export function modeForRoleCode(roleCode) {
   return ROLES.find((r) => r.accepts.includes(roleCode))?.key || null;
 }
 
+/**
+ * What a patient can ask for.
+ *
+ * EMG is not a vehicle class - no ambulance is registered as one. It means
+ * "emergency, send whatever is nearest", and the server alerts every ambulance
+ * in range at once rather than working down the ranked list one at a time.
+ * `urgent` marks it so the screen can set it apart from a considered choice
+ * between care levels.
+ */
 export const AMBULANCE_TYPES = [
+  {
+    code: 'EMG',
+    label: 'Emergency - send anything',
+    hint: 'Alerts every ambulance nearby at once. First to accept comes.',
+    icon: '🚨',
+    urgent: true,
+  },
   { code: 'BLS', label: 'Basic Life Support', hint: 'Oxygen, stretcher, trained attendant', icon: '🚑' },
   { code: 'ALS', label: 'Advanced Life Support', hint: 'Ventilator, defibrillator, paramedic', icon: '🫀' },
   { code: 'ICU', label: 'Mobile ICU', hint: 'Critical care with full monitoring', icon: '🏥' },

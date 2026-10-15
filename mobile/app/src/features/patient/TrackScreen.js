@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Linking, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { getSocket, useResync, useSocketEvent } from '../../lib/socket';
@@ -7,6 +7,7 @@ import { MILESTONE_STEPS } from '../../lib/config';
 import { confirmAction } from '../../lib/confirm';
 import { STATUS_TEXT, colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Button, Card, EmptyState, H2, Loading, Pill, Row, Small, StepTrail } from '../../components/ui';
+import { callCounterparty } from '../../lib/calling';
 import MapPanel from '../../components/MapPanel';
 
 // F.8 Live tracking and ETA, F.9 trip status updates reflected in real time.
@@ -173,12 +174,21 @@ export default function TrackScreen({ navigation }) {
             <Row label="Type" value={booking.provider.ambulance_type} />
             <Row label="Rating" value={`${booking.provider.rating} ★`} />
           </View>
+          {/*
+            Goes through the server rather than dialling the number already in
+            this payload, so the release of a driver's number is logged like
+            every other disclosure (C.5). The dial itself is still the phone's.
+          */}
           <Button
-            title={`Call ${booking.provider.phone_no}`}
+            title={`Call ${booking.provider.driver_name || 'the driver'}`}
             icon="📞"
             variant="secondary"
             style={{ marginTop: spacing.md }}
-            onPress={() => Linking.openURL(`tel:${booking.provider.phone_no}`)}
+            onPress={() =>
+              callCounterparty(booking.booking_id).catch((e) =>
+                Alert.alert('Could not place the call', e.message)
+              )
+            }
           />
         </Card>
       ) : null}

@@ -40,13 +40,14 @@ Session response:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/bookings` | `ambulance_type` plus either `latitude`+`longitude` or `address_text`. Optional `landmark`, `pincode`, `patient_name`, `contact_phone`, `notes`, drop coordinates. 409 if a booking is already open. Responds immediately, then matching runs. |
+| POST | `/api/bookings` | `ambulance_type` — `BLS`, `ALS`, `ICU`, `PTV` or `EMG` — plus either `latitude`+`longitude` or `address_text`. Optional `landmark`, `pincode`, `patient_name`, `contact_phone`, `notes`, drop coordinates. 409 if a booking is already open. Responds immediately, then matching runs. |
 | GET | `/api/bookings` | Booking history, newest first. |
 | GET | `/api/bookings/active` | The open booking, or `null`. |
 | GET | `/api/bookings/:id` | Booking, invoice, rating and every dispatch attempt. |
 | GET | `/api/bookings/:id/track` | Live position, fresh ETA, decoded `route_points`, driver contact. |
 | POST | `/api/bookings/:id/cancel` | Optional `reason`. Blocked once the patient is `ONBOARD`. |
 | POST | `/api/bookings/:id/rating` | `rating_value` 1–5, optional `feedback_text`. Completed trips only, once each. |
+| POST | `/api/bookings/:id/call` | Returns the other party's `phone_no`, `name` and `to_role` so the app can open the phone's dialer. The driver is given the patient; the patient and the control room are given the driver. 409 before an ambulance is assigned or once the booking is closed. Every release is written to the audit trail (C.5) — a phone number is not disclosed quietly. |
 | POST | `/api/bookings/estimate` | `ambulance_type`, `distance_km` → indicative fare breakdown. |
 
 ---
@@ -102,6 +103,9 @@ All of these need the `DRIVER` or `ORG` role; the ones marked † additionally n
 |---|---|---|
 | GET | `/api/notifications` | Inbox plus unread count. |
 | POST | `/api/notifications/read` | Optional `ids`; omit to mark everything read. |
+| POST | `/api/notifications/push-token` | `push_token` (an `ExponentPushToken[...]`), optional `platform`, `device_name`. Registers this handset. Sent on every sign-in, not once on install: a token can rotate, and it has to follow whoever is signed in on that phone. A token already on file moves to the caller. |
+| DELETE | `/api/notifications/push-token` | `push_token`. Called on sign-out, so a shared phone stops delivering the previous driver's offers. |
+| POST | `/api/notifications/push-test` | Sends a test alert to the caller's own devices. 409 when none is registered. A dispatch offer lasts 45 seconds and fails silently when notifications were declined, so this exists to find that out beforehand. |
 
 ---
 
