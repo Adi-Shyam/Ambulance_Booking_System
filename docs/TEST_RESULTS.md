@@ -2,7 +2,7 @@
 
 Ambulance Booking System — Team 16, IT303.
 
-Generated from an actual run by `npm run test:report` on 2026-10-15T18:10:29.046Z.
+Generated from an actual run by `npm run test:report` on 2026-10-15T22:46:22.779Z.
 Do not edit by hand; re-run the command instead.
 
 ## Summary
@@ -10,11 +10,11 @@ Do not edit by hand; re-run the command instead.
 | Level | Purpose | Tests | Passed | Failed |
 |---|---|---|---|---|
 | Unit | One module in isolation | 91 | 91 | 0 |
-| Integration | Modules working together over HTTP and the database | 94 | 94 | 0 |
+| Integration | Modules working together over HTTP and the database | 97 | 97 | 0 |
 | System | Whole-system behaviour and failure recovery | 11 | 11 | 0 |
-| **Total** | | **196** | **196** | **0** |
+| **Total** | | **199** | **199** | **0** |
 
-All 196 tests passed.
+All 199 tests passed.
 
 ## Unit tests
 
@@ -85,17 +85,20 @@ All 196 tests passed.
 | 38 | an unrecognised channel is refused | Pass |
 | 39 | an address can only ever be reached by email | Pass |
 | 40 | a code for an unknown address needs purpose REGISTER, not the LOGIN default | Pass |
-| 41 | a correct code on an unknown address asks for what is missing | Pass |
-| 42 | a name and a number create the account and return a session | Pass |
-| 43 | the client is told which contacts are proved | Pass |
-| 44 | an OTP-only account cannot be signed into with a password | Pass |
-| 45 | an OTP-only account can set a first password without knowing one | Pass |
-| 46 | one code survives the round trip that asks for more | Pass |
-| 47 | a number already registered to someone else is refused | Pass |
-| 48 | a provider registered by email still starts PENDING | Pass |
-| 49 | nobody can register themselves as an administrator | Pass |
-| 50 | signing in writes to D1 (DFD 0.1.3) | Pass |
-| 51 | a user can see and end their sessions | Pass |
+| 41 | the registration form creates nothing until the code comes back | Pass |
+| 42 | a weak password is refused before a code is spent | Pass |
+| 43 | an address already registered is refused before a code is spent | Pass |
+| 44 | a correct code on an unknown address asks for what is missing | Pass |
+| 45 | a name and a number create the account and return a session | Pass |
+| 46 | the client is told which contacts are proved | Pass |
+| 47 | an OTP-only account cannot be signed into with a password | Pass |
+| 48 | an OTP-only account can set a first password without knowing one | Pass |
+| 49 | one code survives the round trip that asks for more | Pass |
+| 50 | a number already registered to someone else is refused | Pass |
+| 51 | a provider registered by email still starts PENDING | Pass |
+| 52 | nobody can register themselves as an administrator | Pass |
+| 53 | signing in writes to D1 (DFD 0.1.3) | Pass |
+| 54 | a user can see and end their sessions | Pass |
 
 ## System tests
 

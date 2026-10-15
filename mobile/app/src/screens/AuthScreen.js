@@ -27,7 +27,7 @@ const REGISTRABLE = {
 };
 
 export default function AuthScreen() {
-  const { signIn, register, requestOtp, verifyOtp } = useAuth();
+  const { signIn, startRegistration, requestOtp, verifyOtp } = useAuth();
 
   const [roleKey, setRoleKey] = useState(null);
   const [mode, setMode] = useState(MODES.SIGN_IN);
@@ -110,12 +110,29 @@ export default function AuthScreen() {
   // client decides from the shape of it which one the server is being told.
   const submitSignIn = () => run(() => signIn(roleKey, form.identity.trim(), form.password));
 
+  /**
+   * Registering is two steps, because the address has to be proved before the
+   * account exists. This is the first: the server checks the details and
+   * emails a code. `completeRegistration` is the second.
+   */
   const submitRegister = () =>
-    run(() =>
-      register(roleKey, {
+    run(async () => {
+      const r = await startRegistration({
         full_name: form.full_name.trim(),
         phone_no: form.phone_no.trim(),
-        email_id: form.email_id.trim() || undefined,
+        email_id: form.email_id.trim(),
+        password: form.password,
+        role_code: regRole,
+      });
+      setOtp({ sent: true, code: '', devCode: r.otp_code || '', sentTo: r.sent_to, channel: r.channel });
+    });
+
+  /** The second step: the code comes back, and the account is created. */
+  const completeRegistration = () =>
+    run(() =>
+      verifyOtp(roleKey, form.email_id.trim(), otp.code.trim(), {
+        full_name: form.full_name.trim(),
+        phone_no: form.phone_no.trim(),
         password: form.password,
         role_code: regRole,
       })
@@ -178,7 +195,13 @@ export default function AuthScreen() {
           {tabs.map(([m, label]) => (
             <Pressable
               key={m}
-              onPress={() => { setMode(m); setError(''); }}
+              // Clearing the code too: a half-finished registration must not
+              // follow you to the sign-in form, where its field means nothing.
+              onPress={() => {
+                setMode(m);
+                setError('');
+                setOtp({ sent: false, code: '', devCode: '' });
+              }}
               style={[styles.tab, mode === m && styles.tabActive]}
             >
               <Text style={{ color: mode === m ? colors.white : colors.muted, fontWeight: '600', fontSize: 13.5 }}>
@@ -269,7 +292,13 @@ export default function AuthScreen() {
             />
           )}
 
-          {mode !== MODES.OTP && (
+          {/*
+            Hidden once a registration code is outstanding: the password has
+            already been accepted and is carried through with the code, so
+            leaving the field on screen would invite someone to change it
+            between the two halves of one request.
+          */}
+          {mode !== MODES.OTP && !otp.sent && (
             <Field
               label="Password"
               value={form.password}
@@ -279,7 +308,11 @@ export default function AuthScreen() {
             />
           )}
 
-          {mode === MODES.OTP && otp.sent && (
+          {/*
+            Registering and signing in by code both end here, because both
+            have to prove the address before anything happens.
+          */}
+          {otp.sent && (
             <>
               <Field
                 label="Verification code"
@@ -295,7 +328,12 @@ export default function AuthScreen() {
                 because it plays no part in proving the address - it is what
                 the ambulance crew ring when they cannot find the patient.
               */}
-              {otp.needsName ? (
+              {/*
+                Only the OTP tab ever reaches this: the registration form
+                collected a name and a number up front, so asking again there
+                would be asking twice for the same thing.
+              */}
+              {mode === MODES.OTP && otp.needsName ? (
                 <>
                   <Field
                     label="Your name"
@@ -333,7 +371,21 @@ export default function AuthScreen() {
           )}
 
           {mode === MODES.SIGN_IN && <Button title="Sign in" onPress={submitSignIn} loading={busy} />}
-          {mode === MODES.REGISTER && <Button title="Create account" onPress={submitRegister} loading={busy} />}
+          {mode === MODES.REGISTER && (
+            <Button
+              title={otp.sent ? 'Verify and create account' : 'Email me a code'}
+              onPress={otp.sent ? completeRegistration : submitRegister}
+              loading={busy}
+            />
+          )}
+          {mode === MODES.REGISTER && otp.sent ? (
+            <Button
+              title="Send a new code"
+              variant="ghost"
+              style={{ marginTop: spacing.sm }}
+              onPress={submitRegister}
+            />
+          ) : null}
           {mode === MODES.OTP && (
             <Button
               title={otp.sent ? 'Verify and continue' : 'Send code'}

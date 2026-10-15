@@ -76,18 +76,39 @@ function sessionResponse(user) {
 }
 
 // ------------------------------------------------- 0.1.1 register + verify
+/**
+ * Starts a registration. It does not finish one.
+ *
+ * Everything is checked here - the name, the number, the address, the
+ * password, and that neither identifier is already taken - so somebody learns
+ * their email is in use before waiting on a code rather than after. Then a
+ * code goes to the address, and `/otp/verify` is what actually creates the
+ * account.
+ *
+ * Splitting it this way is the whole point: an account cannot exist with an
+ * address nobody has proved. Creating one here and emailing afterwards would
+ * leave a real account behind whether or not the address was ever read, which
+ * is exactly the hole this closes.
+ */
 router.post('/register', registerLimiter, asyncRoute(async (req, res) => {
   const full_name = v.name(req.body.full_name);
   const phone_no = v.phone(req.body.phone_no);
   // Required, not optional: an address is how an account is reached and how it
   // is proved. The number beside it is contact data for the crew, and nothing
-  // here checks that it is real - see `phone_verified`.
+  // checks that it is real - see `phone_verified`.
   const email_id = v.email(v.required(req.body.email_id, 'email_id'));
   const role_code = v.oneOf(req.body.role_code || 'USER', ['USER', 'DRIVER', 'ORG'], 'role_code');
-  const password = v.password(req.body.password);
+  // Validated now so a weak one is rejected before a code is spent, but not
+  // stored: the client holds it and sends it back with the code. Keeping an
+  // unverified password hash lying about would be storing a credential for an
+  // account that may never exist.
+  v.password(req.body.password);
 
   if (findUserByPhone(phone_no)) {
-    return res.status(409).json({ error: 'An account already exists for this mobile number' });
+    return res.status(409).json({
+      error: 'An account already exists for this mobile number',
+      field: 'phone_no',
+    });
   }
   if (findUserByEmail(email_id)) {
     return res.status(409).json({
@@ -96,32 +117,31 @@ router.post('/register', registerLimiter, asyncRoute(async (req, res) => {
     });
   }
 
-  const now = nowIso();
-  const user_id = nextId('user');
-  // Patients are usable immediately; providers stay PENDING until an
-  // administrator verifies their documents (F.13).
-  const verification_status = role_code === 'USER' ? 'VERIFIED' : 'PENDING';
+  const otp_code = String(Math.floor(100000 + Math.random() * 900000));
+  const otp_expiry = new Date(Date.now() + OTP_TTL_MS).toISOString();
 
+  db.prepare('UPDATE otps SET consumed = 1 WHERE identifier = ? AND consumed = 0').run(email_id);
   db.prepare(
-    `INSERT INTO users (user_id, full_name, phone_no, email_id, email_verified, phone_verified,
-                        password_hash, role_code, verification_status, registration_date,
-                        created_at, updated_at)
-     VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    user_id, full_name, phone_no, email_id,
-    bcrypt.hashSync(password, 12),           // bcrypt digest, cost 12
-    role_code, verification_status, now.slice(0, 10), now, now
-  );
+    `INSERT INTO otps (identifier, identifier_type, otp_code, otp_expiry, purpose,
+                       channel, destination, created_at)
+     VALUES (?, 'EMAIL', ?, ?, 'REGISTER', 'EMAIL', ?, ?)`
+  ).run(email_id, otp_code, otp_expiry, email_id, nowIso());
 
-  audit('USER_REGISTERED', {
-    actorUserId: user_id, actorRole: role_code, entityType: 'user', entityId: user_id,
-    details: { phone_no, role_code },
+  await messaging.sendOtp({ phoneNo: phone_no, otpCode: otp_code, channel: 'EMAIL', emailId: email_id });
+  audit('OTP_ISSUED', {
+    entityType: 'email', entityId: email_id,
+    details: { purpose: 'REGISTER', channel: 'EMAIL', role_code },
   });
 
-  const user = findUserByPhone(phone_no);
-  res.status(201).json({
-    message: 'Registration successful',
-    ...sessionResponse(user),
+  // 202: understood and under way, but nothing has been created yet.
+  res.status(202).json({
+    message: 'Check your email for a 6-digit code to finish creating your account',
+    needs_verification: true,
+    channel: 'EMAIL',
+    verifying: 'EMAIL',
+    sent_to: messaging.maskDestination(email_id, 'EMAIL'),
+    otp_expiry,
+    ...(config.exposeOtp ? { otp_code, dev_note: 'otp_code is exposed because EXPOSE_OTP_IN_RESPONSE=true' } : {}),
   });
 }));
 
@@ -252,6 +272,7 @@ router.post('/otp/verify', otpVerifyLimiter, asyncRoute(async (req, res) => {
   let full_name = null;
   let role_code = null;
   let new_phone = null;
+  let new_password = null;
   if (!user) {
     if (!verifyingEmail) {
       // A phone code is for proving a number on an account that exists. There
@@ -262,6 +283,10 @@ router.post('/otp/verify', otpVerifyLimiter, asyncRoute(async (req, res) => {
 
     full_name = req.body.full_name ? v.name(req.body.full_name) : null;
     new_phone = req.body.phone_no ? v.phone(req.body.phone_no) : null;
+    // Optional: the registration form sends one, the code-only path does not.
+    // The schema allows a NULL hash for accounts that sign in by code every
+    // time rather than holding a password they never chose.
+    new_password = req.body.password ? v.password(req.body.password) : null;
 
     if (!full_name || !new_phone) {
       return res.status(404).json({
@@ -297,16 +322,21 @@ router.post('/otp/verify', otpVerifyLimiter, asyncRoute(async (req, res) => {
       `INSERT INTO users (user_id, full_name, phone_no, email_id, email_verified, phone_verified,
                           password_hash, role_code, verification_status, registration_date,
                           created_at, updated_at)
-       VALUES (?, ?, ?, ?, 1, 0, NULL, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, 1, 0, ?, ?, ?, ?, ?, ?)`
     ).run(
-      user_id, full_name, new_phone, identifier, role_code,
+      user_id, full_name, new_phone, identifier,
+      new_password ? bcrypt.hashSync(new_password, 12) : null,   // bcrypt, cost 12
+      role_code,
       role_code === 'USER' ? 'VERIFIED' : 'PENDING',
       now.slice(0, 10), now, now
     );
 
     audit('USER_REGISTERED', {
       actorUserId: user_id, actorRole: role_code, entityType: 'user', entityId: user_id,
-      details: { email_id: identifier, role_code, via: 'otp', channel: row.channel },
+      details: {
+        email_id: identifier, role_code, channel: row.channel,
+        via: new_password ? 'registration form' : 'code only',
+      },
     });
 
     user = findUserByEmail(identifier);

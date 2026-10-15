@@ -49,6 +49,69 @@ test('a code for an unknown address needs purpose REGISTER, not the LOGIN defaul
   assert.equal(asRegister.status, 200, 'REGISTER is how a new address gets a code at all');
 });
 
+// The registration form used to create the account there and then, with
+// email_verified = 0 and no code ever sent. The address was required and
+// never checked, which is the same as not requiring it.
+test('the registration form creates nothing until the code comes back', async () => {
+  const EMAIL = 'form.registration@example.in';
+  const PHONE = '9811133301';
+
+  const started = await post('/api/auth/register', {
+    full_name: 'Form Registration', phone_no: PHONE,
+    email_id: EMAIL, password: 'secret123',
+  });
+
+  assert.equal(started.status, 202, 'accepted, not created');
+  assert.equal(started.body.needs_verification, true);
+  assert.equal(
+    database().prepare('SELECT 1 FROM users WHERE email_id = ?').get(EMAIL), undefined,
+    'an account that exists before its address is proved is the hole this closes'
+  );
+
+  const code = codeFor(EMAIL);
+  assert.ok(code, 'and a code went out');
+
+  const done = await post('/api/auth/otp/verify', {
+    email_id: EMAIL, otp_code: code,
+    full_name: 'Form Registration', phone_no: PHONE, password: 'secret123',
+  });
+
+  assert.equal(done.status, 201, JSON.stringify(done.body));
+  assert.equal(done.body.user.email_verified, true, 'the address is proved');
+  assert.equal(done.body.user.phone_verified, false, 'the number still is not');
+
+  const login = await post('/api/auth/login', { email_id: EMAIL, password: 'secret123' });
+  assert.equal(login.status, 200, 'the password chosen on the form is the one that works');
+});
+
+test('a weak password is refused before a code is spent', async () => {
+  const r = await post('/api/auth/register', {
+    full_name: 'Weak Password', phone_no: '9811133302',
+    email_id: 'weak.password@example.in', password: 'xy',
+  });
+
+  assert.equal(r.status, 400);
+  assert.equal(r.body.field, 'password');
+  assert.equal(
+    codeFor('weak.password@example.in'), undefined,
+    'nothing was emailed for a request that could never have completed'
+  );
+});
+
+test('an address already registered is refused before a code is spent', async () => {
+  const r = await post('/api/auth/register', {
+    full_name: 'Already Here', phone_no: '9811133303',
+    email_id: 'adithya@example.in', password: 'secret123',
+  });
+
+  assert.equal(r.status, 409);
+  assert.equal(r.body.field, 'email_id');
+  assert.equal(
+    codeFor('adithya@example.in'), undefined,
+    'and the existing account was not sent a code it did not ask for'
+  );
+});
+
 test('a correct code on an unknown address asks for what is missing', async () => {
   await requestCode(NEW_PATIENT.email);
   const r = await post('/api/auth/otp/verify', {

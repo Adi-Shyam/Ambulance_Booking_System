@@ -117,9 +117,12 @@ export function AuthProvider({ children }) {
         return adopt(await api.post('/api/auth/login', body), roleKey);
       },
 
-      async register(roleKey, details) {
-        return adopt(await api.post('/api/auth/register', details), roleKey);
-      },
+      /**
+       * Starts a registration: the server checks the details and emails a
+       * code. It does not create the account - `verifyOtp` does, once the
+       * code comes back - so there is no session to adopt here.
+       */
+      startRegistration: (details) => api.post('/api/auth/register', details),
 
       /**
        * Asks for a code against one contact detail. `identifier` is an email

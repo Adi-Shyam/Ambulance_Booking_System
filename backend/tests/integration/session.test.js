@@ -64,20 +64,33 @@ describe('signing in writes to D1 (DFD 0.1.3)', () => {
       'only a successful authentication may create a session');
   });
 
-  test('registration and OTP sign-in also create sessions', async () => {
-    const registered = await post('/api/auth/register', {
-      full_name: 'Session Test User', phone_no: '9765432100',
-      email_id: 'session.test@example.in', password: 'secret123',
-    });
-    assert.equal(registered.status, 201);
-    assert.equal(sessionsFor(registered.body.user.user_id).length, 1, 'registration signs the user in');
+  test('registration creates no session until the address is proved', async () => {
+    const EMAIL = 'session.test@example.in';
 
-    const issued = await post('/api/auth/otp/request', { phone_no: '9765432100' });
-    const verified = await post('/api/auth/otp/verify', {
-      phone_no: '9765432100', otp_code: issued.body.otp_code,
+    const started = await post('/api/auth/register', {
+      full_name: 'Session Test User', phone_no: '9765432100',
+      email_id: EMAIL, password: 'secret123',
     });
-    assert.equal(verified.status, 200);
-    assert.equal(sessionsFor(registered.body.user.user_id).length, 2, 'OTP sign-in adds a second session');
+    assert.equal(started.status, 202, 'accepted and under way, not created');
+    assert.equal(started.body.needs_verification, true);
+    assert.equal(started.body.user, undefined, 'and no session to hand back yet');
+    assert.equal(
+      db.prepare('SELECT COUNT(*) AS n FROM users WHERE email_id = ?').get(EMAIL).n, 0,
+      'nothing exists until the code comes back'
+    );
+
+    const created = await post('/api/auth/otp/verify', {
+      email_id: EMAIL, otp_code: started.body.otp_code,
+      full_name: 'Session Test User', phone_no: '9765432100', password: 'secret123',
+    });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.equal(sessionsFor(created.body.user.user_id).length, 1, 'now it signs them in');
+    assert.equal(created.body.user.email_verified, true);
+
+    // The password set during registration works afterwards.
+    const signedIn = await post('/api/auth/login', { email_id: EMAIL, password: 'secret123' });
+    assert.equal(signedIn.status, 200, 'the password given at sign-up is the one on the account');
+    assert.equal(sessionsFor(created.body.user.user_id).length, 2, 'and that is a second session');
   });
 
   test('each sign-in is a separate session, not a reused one', async () => {
