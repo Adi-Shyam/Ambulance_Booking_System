@@ -44,8 +44,15 @@ try {
 } finally { Pop-Location }
 
 # prebuild rewrites the directory, so this has to be written after it.
-$sdkEscaped = $Sdk -replace '\\', '\\\\' -replace ':', '\:'
-Set-Content -Path (Join-Path $android 'local.properties') -Value "sdk.dir=$sdkEscaped" -Encoding utf8
+#
+# Forward slashes rather than escaped backslashes. A .properties file reads a
+# backslash as an escape character, so a Windows path loses every segment that
+# begins with a letter Java recognises - C:\Users\Adith\Android\Sdk arrives as
+# C:UsersAdithAndroidSdk. Gradle then fails with "the filename, directory name,
+# or volume label syntax is incorrect", which says nothing about the cause.
+# Java accepts forward slashes on Windows, so there is nothing to escape.
+$sdkForward = $Sdk.Replace('\', '/')
+Set-Content -Path (Join-Path $android 'local.properties') -Value "sdk.dir=$sdkForward" -Encoding utf8
 
 Write-Host "Building (API: $ApiUrl)..." -ForegroundColor Cyan
 Push-Location $android
