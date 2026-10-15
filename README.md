@@ -305,13 +305,23 @@ Render dashboard choose **New → Blueprint** and point it at this repository.
 Render reads the file and creates the service; set `BREVO_API_KEY` in the
 dashboard rather than in the file, which is in version control.
 
-Then point the app at it and rebuild:
+The service is deployed at:
+
+```
+https://ambulance-booking-api.onrender.com
+```
+
+`mobile/app/eas.json` already points the `apk-hosted` profile at it, so the
+installable build is:
 
 ```bash
-# in mobile/app/eas.json, set apk-hosted's EXPO_PUBLIC_API_URL to the
-# https://<service>.onrender.com address Render gives you, then:
 eas build --platform android --profile apk-hosted
 ```
+
+The `apk-lan` profile is still there for working offline against a laptop on
+the same network. It is rarely needed now: the hosted APK can be pointed at a
+LAN address from the sign-in screen at runtime, which is the whole reason that
+setting exists.
 
 Two things about the free plan to know before demo day, neither of which is a
 fault in the code:
