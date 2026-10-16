@@ -1,0 +1,957 @@
+% =====================================================================
+%  Ambulance Booking System - User Manual
+%  IT303 Software Engineering, NITK Surathkal - Team 16
+%
+%  Build with XeLaTeX (the fonts are loaded by file, which pdfLaTeX
+%  cannot do):
+%
+%      xelatex -interaction=nonstopmode user-manual.tex
+%      xelatex -interaction=nonstopmode user-manual.tex   % for the ToC
+%
+%  Everything the build needs is in this folder: fonts/ holds the same
+%  Noto Sans faces the app itself ships, images/ holds the screenshots.
+%  Nothing is fetched from the system font library, so the document
+%  comes out the same on any machine.
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage[a4paper,top=25mm,bottom=24mm,left=24mm,right=24mm,headheight=22pt,footskip=14mm]{geometry}
+\usepackage[table]{xcolor}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage[most]{tcolorbox}
+\usepackage[hidelinks]{hyperref}
+
+% ------------------------------------------------- the DBIM palette
+% Digital Brand Identity Manual v3 (MeitY, January 2025). Cinnamon Red
+% is the colour group the application uses, so the manual and the thing
+% it documents are recognisably one piece of work.
+\definecolor{dbimkey}{HTML}{771D1D}
+\definecolor{dbimdark}{HTML}{A72626}
+\definecolor{dbimmid}{HTML}{D75151}
+\definecolor{dbimlight}{HTML}{FAAAAA}
+\definecolor{dbimpale}{HTML}{FCDADA}
+\definecolor{linen}{HTML}{EBEAEA}
+\definecolor{greyone}{HTML}{C6C6C6}
+\definecolor{greythree}{HTML}{606060}
+\definecolor{ink}{HTML}{150202}
+\definecolor{okgreen}{HTML}{198754}
+\definecolor{warnamber}{HTML}{FFC107}
+\definecolor{warnfill}{HTML}{FFF4D6}
+\definecolor{dangerred}{HTML}{DC3545}
+\definecolor{dangerfill}{HTML}{FBE3E5}
+
+% --------------------------------------------------------- typography
+% Noto Sans, as DBIM section 4.1.1 requires.
+\setmainfont{NotoSans}[
+  Path            = fonts/,
+  Extension       = .ttf,
+  UprightFont     = *_400Regular,
+  BoldFont        = *_700Bold,
+  ItalicFont      = *_400Regular_Italic,
+  BoldItalicFont  = *_700Bold_Italic,
+]
+\newfontfamily\semibold{NotoSans}[Path=fonts/, Extension=.ttf, UprightFont=*_600SemiBold]
+\color{ink}
+
+\titleformat{\section}{\color{dbimkey}\bfseries\Large}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\color{dbimdark}\bfseries\large}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\color{ink}\bfseries\normalsize}{\thesubsubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{16pt}{7pt}
+\titlespacing*{\subsection}{0pt}{13pt}{5pt}
+\titlespacing*{\subsubsection}{0pt}{11pt}{4pt}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\renewcommand{\arraystretch}{1.25}
+
+% ----------------------------------------------- headers and footers
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{greyone}\leaders\hrule height \headrulewidth\hfill}}
+\renewcommand{\footrule}{\hbox to\headwidth{\color{greyone}\leaders\hrule height \footrulewidth\hfill}}
+\fancyhead[L]{\footnotesize\color{greythree}Ambulance Booking System \textperiodcentered{} User Manual}
+\fancyhead[R]{\footnotesize\color{greythree}Version 1.0}
+\fancyfoot[L]{\footnotesize\color{greythree}Team 16 \textperiodcentered{} IT303 \textperiodcentered{} NITK Surathkal}
+\fancyfoot[R]{\footnotesize\color{greythree}Page \thepage{} of \pageref{LastPage}}
+
+% --------------------------------------------------------- list style
+% The reference manuals use a filled disc with hollow sub-bullets, and
+% numbered steps for anything the reader is meant to carry out in order.
+\setlist[itemize,1]{label=\textcolor{dbimdark}{\textbullet}, leftmargin=1.4em, itemsep=2pt, topsep=4pt}
+\setlist[itemize,2]{label=\textcolor{dbimmid}{$\circ$}, leftmargin=1.3em, itemsep=1pt, topsep=2pt}
+\setlist[enumerate,1]{label=\textcolor{dbimdark}{\bfseries\arabic*.}, leftmargin=1.7em, itemsep=3pt, topsep=4pt}
+
+% ------------------------------------------------------------- boxes
+\newtcolorbox{notebox}[1][Note]{
+  enhanced, breakable, colback=dbimpale, colframe=dbimpale,
+  borderline west={2.5pt}{0pt}{dbimmid},
+  boxrule=0pt, arc=1pt, left=10pt, right=10pt, top=8pt, bottom=8pt,
+  fontupper=\small,
+  before upper={\textcolor{dbimkey}{\textbf{#1}}\par\vspace{3pt}}
+}
+\newtcolorbox{warnbox}[1][Important]{
+  enhanced, breakable, colback=warnfill, colframe=warnfill,
+  borderline west={2.5pt}{0pt}{warnamber},
+  boxrule=0pt, arc=1pt, left=10pt, right=10pt, top=8pt, bottom=8pt,
+  fontupper=\small,
+  before upper={\textcolor{ink}{\textbf{#1}}\par\vspace{3pt}}
+}
+\newtcolorbox{dangerbox}[1][Caution]{
+  enhanced, breakable, colback=dangerfill, colframe=dangerfill,
+  borderline west={2.5pt}{0pt}{dangerred},
+  boxrule=0pt, arc=1pt, left=10pt, right=10pt, top=8pt, bottom=8pt,
+  fontupper=\small,
+  before upper={\textcolor{dangerred}{\textbf{#1}}\par\vspace{3pt}}
+}
+
+% ----------------------------------------------------------- figures
+\captionsetup{font={small,color=greythree}, labelfont={bf,color=dbimdark},
+              labelsep=period, skip=5pt, justification=centering}
+
+% A screenshot of the phone application. These are more than twice as
+% tall as they are wide, so they are constrained by height; giving them
+% a width would make them taller than the page.
+\newcommand{\phoneshot}[2]{%
+  \begin{figure}[H]\centering
+    \fcolorbox{greyone}{white}{\includegraphics[height=125mm]{images/#1}}
+    \caption{#2}
+  \end{figure}}
+
+% Two phone screenshots that belong to one another.
+\newcommand{\phonepair}[4]{%
+  \begin{figure}[H]\centering
+    \fcolorbox{greyone}{white}{\includegraphics[height=112mm]{images/#1}}\hspace{7mm}%
+    \fcolorbox{greyone}{white}{\includegraphics[height=112mm]{images/#3}}
+    \caption{#2. #4.}
+  \end{figure}}
+
+% A screenshot of the control room, which is used on a wider screen.
+\newcommand{\wideshot}[2]{%
+  \begin{figure}[H]\centering
+    \fcolorbox{greyone}{white}{\includegraphics[width=0.86\linewidth]{images/#1}}
+    \caption{#2}
+  \end{figure}}
+
+% ------------------------------------------------------------ tables
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\thead}[1]{\textcolor{white}{\textbf{#1}}}
+
+\newenvironment{reftable}[2]% {column spec}{header row}
+  {\begin{center}\small\begin{tabular}{#1}
+   \rowcolor{dbimkey}#2\\}
+  {\end{tabular}\end{center}}
+
+
+\hypersetup{
+  pdftitle={Ambulance Booking System - User Manual},
+  pdfauthor={Team 16 - Adithya Shyam D, Dev Patel, Ritesh Bhagat},
+  pdfsubject={IT303 Software Engineering, NITK Surathkal},
+  pdfkeywords={ambulance, booking, user manual, IT303, NITK},
+  bookmarksnumbered=true
+}
+
+% =====================================================================
+\begin{document}
+
+% ------------------------------------------------------- title page
+\thispagestyle{empty}
+\begin{center}
+\vspace*{6mm}
+
+{\small\semibold\color{dbimdark}NATIONAL INSTITUTE OF TECHNOLOGY KARNATAKA, SURATHKAL}\\[1mm]
+{\small\color{greythree}Department of Information Technology}
+
+\vspace{14mm}
+{\color{greythree}\rule{0.45\linewidth}{0.6pt}}
+
+\vspace{10mm}
+{\color{dbimkey}\bfseries\fontsize{30}{36}\selectfont Ambulance Booking System}
+
+\vspace{5mm}
+{\color{dbimdark}\fontsize{19}{24}\selectfont User Manual}
+
+\vspace{6mm}
+{\color{greythree}\large For patients, ambulance crews and the control room}
+
+\vspace{10mm}
+{\color{greythree}\rule{0.45\linewidth}{0.6pt}}
+
+\vspace{15mm}
+
+{\color{ink}\large\bfseries Team 16}\\[2mm]
+{\color{greythree}IT303 \textemdash{} Software Engineering}
+
+\vspace{14mm}
+
+{\color{greythree}Document prepared by:}
+
+\vspace{4mm}
+\begin{tabular}{@{}l@{\hspace{10mm}}l@{}}
+\textbf{Adithya Shyam D} & 241IT005 \\
+\textbf{Dev Patel}       & 241IT023 \\
+\textbf{Ritesh Bhagat}   & 241IT063 \\
+\end{tabular}
+
+\vspace{13mm}
+
+\begin{tabular}{@{}r@{\hspace{5mm}}l@{}}
+\color{greythree}Document version & \textbf{1.0} \\
+\color{greythree}Date of issue     & \textbf{16 October 2026} \\
+\color{greythree}Applies to        & \textbf{Ambulance Booking v1.0.0} \\
+\end{tabular}
+
+\vfill
+{\footnotesize\color{greythree}This document describes an academic project. In a life-threatening\\
+emergency, telephone \textbf{108} directly.}
+\vspace{6mm}
+\end{center}
+
+\newpage
+
+% ---------------------------------------------------------- contents
+% titlesec styles \section*, so the contents heading matches every other.
+\renewcommand{\contentsname}{Contents}
+\setcounter{tocdepth}{2}
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Introduction}
+
+\subsection{Purpose of this manual}
+
+This manual serves the purpose of highlighting the different features which are
+available within the Ambulance Booking System and providing a detailed
+explanation of how each kind of user can carry them out. The system brings
+together three groups of people who, between them, complete a single ambulance
+journey: the \textbf{patient} who needs an ambulance, the \textbf{ambulance
+crew} who answer the request and drive it, and the \textbf{control room} who
+keep the service running and settle anything that goes wrong.
+
+One application serves all three. The features a user is shown are decided by
+the account they sign in with, and not by a separate download, so this manual
+is organised in the same way: a common chapter on obtaining an account, and
+then one chapter for each role.
+
+\subsection{Who should read this}
+
+\begin{reftable}{L{0.26\linewidth} L{0.62\linewidth}}{\thead{Reader} & \thead{Read these chapters}}
+\textbf{Patients and families} & Sections~\ref{sec:access} and~\ref{sec:patient}, and Section~\ref{sec:trouble}. \\
+\rowcolor{linen}
+\textbf{Drivers and operators} & Sections~\ref{sec:access} and~\ref{sec:crew}, and Section~\ref{sec:trouble}. \\
+\textbf{Control room staff} & Sections~\ref{sec:access}, \ref{sec:control} and~\ref{sec:trouble}. \\
+\rowcolor{linen}
+\textbf{Evaluators} & All of it. Appendix~\ref{app:trace} maps the specification onto the sections that demonstrate each requirement. \\
+\end{reftable}
+
+\subsection{What a user needs before starting}
+
+\begin{itemize}
+  \item An Android phone with the \textbf{Ambulance Booking} application
+        installed on it. The control room may instead be opened in any desktop
+        browser.
+  \item An email address that can be opened on the same device. The system
+        sends a verification code to this address during registration, and the
+        registration cannot be completed without it.
+  \item A mobile number. The number is not used to sign in; it is the number
+        the ambulance crew will call if they are unable to find the patient.
+  \item A working internet connection. The application communicates with a
+        server for every operation.
+\end{itemize}
+
+\subsection{Abbreviations used in this document}
+
+\begin{reftable}{L{0.14\linewidth} L{0.74\linewidth}}{\thead{Term} & \thead{Meaning}}
+\textbf{EMG} & Emergency request. Alerted to every nearby ambulance at once, irrespective of class. \\
+\rowcolor{linen}
+\textbf{BLS} & Basic Life Support ambulance \textemdash{} oxygen, stretcher and a trained attendant. \\
+\textbf{ALS} & Advanced Life Support ambulance \textemdash{} ventilator, defibrillator and a paramedic. \\
+\rowcolor{linen}
+\textbf{ICU} & Mobile Intensive Care Unit \textemdash{} critical care with full monitoring. \\
+\textbf{PTV} & Patient Transport Vehicle \textemdash{} a planned, non-emergency transfer. \\
+\rowcolor{linen}
+\textbf{OTP} & One Time Password. A six-digit code, valid for five minutes, sent by email. \\
+\textbf{ETA} & Estimated Time of Arrival. \\
+\rowcolor{linen}
+\textbf{Offer} & A request presented to one ambulance, which expires after 45 seconds. \\
+\end{reftable}
+
+\begin{dangerbox}[In a real emergency]
+This application was built as an academic project for the course IT303. In a
+life-threatening emergency, users should telephone \textbf{108} directly. A
+reminder to this effect is shown on every screen of the application where it
+can reasonably be placed.
+\end{dangerbox}
+
+% =====================================================================
+\section{Accessing the system}
+\label{sec:access}
+
+\subsection{Choosing a role}
+
+On opening the application for the first time, users are presented with the
+role selection screen. Users need to select the role under which they are
+signing in.
+
+\begin{itemize}
+  \item \textbf{Book an ambulance} \textemdash{} for patients and their families.
+  \item \textbf{Drive an ambulance} \textemdash{} for drivers and ambulance operators.
+  \item \textbf{Control room} \textemdash{} for administrators.
+\end{itemize}
+
+If an incorrect role is selected, users can return to this screen using the
+\textbf{Change mode} link at the top of the sign-in screen. Nothing is decided
+until the user signs in.
+
+\phoneshot{01-choose-role.jpg}{The role selection screen. The address of the
+server in use is shown at the bottom, and the reminder to call 108 is shown
+below it.}
+
+\subsection{Registering a new account}
+
+Registration proves that the email address given belongs to the person
+registering. No account is created until the code sent to that address has been
+entered, so every account in the system has a working address behind it.
+
+\begin{enumerate}
+  \item Open the application and select the appropriate role.
+  \item Click on \textbf{Register}.
+  \item Users need to fill in their full name, mobile number, email address and
+        a password.
+  \item Click on \textbf{Email me a code}. No account has been created at this
+        stage.
+  \item Users need to open their email and copy the six-digit code that has been
+        sent to them. The code is valid for five minutes.
+  \item Enter the code in the application and click on \textbf{Verify and create
+        account}.
+\end{enumerate}
+
+The user is signed in as soon as the code is accepted. Drivers and operators are
+asked for their vehicle details immediately afterwards; this is described in
+Section~\ref{sec:crewverify}.
+
+\phonepair{pat-register.jpg}{Left: the registration form, which asks for an email address}{02-sign-in.jpg}{Right: the sign-in screen, which accepts either an email address or a mobile number}
+
+\subsubsection{Rules applied to the password}
+
+The application refuses a password that would be easy to guess, and reports the
+reason as the password is typed rather than after the form is submitted. A
+password is refused if it:
+
+\begin{itemize}
+  \item is shorter than eight characters;
+  \item appears on the list of most commonly used passwords;
+  \item is a single character repeated, or a simple run such as \texttt{123456}
+        or \texttt{abcdef};
+  \item contains the user's own name, mobile number or email address.
+\end{itemize}
+
+Either a long passphrase or a shorter mixture of letters, digits and symbols is
+accepted. The phrase \texttt{correct horse battery staple} is accepted;
+\texttt{Password1!} is not.
+
+\subsection{Signing in}
+
+Two methods of signing in are available.
+
+\begin{itemize}
+  \item \textbf{With a password.} Users need to enter either their email address
+        or their mobile number, followed by their password, and click on
+        \textbf{Sign in}.
+  \item \textbf{With a one time password.} Users need to click on \textbf{OTP},
+        enter their email address, and click on \textbf{Email me a code}. The
+        code received by email is then entered in place of a password. This is
+        useful when the password has been forgotten and the user does not wish
+        to reset it.
+\end{itemize}
+
+\subsection{Recovering a forgotten password}
+
+\begin{enumerate}
+  \item On the sign-in screen, click on \textbf{Forgot password?}
+  \item Enter the registered email address and click on \textbf{Email me a reset
+        code}.
+  \item Enter the code received by email and choose a new password, observing
+        the rules listed above.
+\end{enumerate}
+
+\begin{warnbox}[Resetting a password ends every session]
+Once a password has been reset, every session on every device is signed out.
+This is deliberate: if the old password were known to somebody else, leaving
+their session open would defeat the purpose of the reset. Users need to sign in
+again with the new password.
+\end{warnbox}
+
+% =====================================================================
+\section{The patient module}
+\label{sec:patient}
+
+Patients have access to a certain set of actions that can be performed within
+the Ambulance Booking module for requesting and following an ambulance. They
+are illustrated below.
+
+\subsection{Actions available to the patient}
+
+\begin{itemize}
+  \item Request an ambulance to a pickup point, set in any of three ways:
+    \begin{itemize}
+      \item by reading the device GPS;
+      \item by moving the map under a fixed centre pin;
+      \item by searching for an address or landmark.
+    \end{itemize}
+  \item Select the class of ambulance required:
+    \begin{itemize}
+      \item Emergency (EMG), Basic Life Support (BLS), Advanced Life Support
+            (ALS), Mobile ICU (ICU) or Patient Transport (PTV).
+    \end{itemize}
+  \item Follow the assigned ambulance on a live map, with an estimated time of
+        arrival that is revised as the ambulance travels.
+  \item Telephone the assigned driver directly from the application.
+  \item Cancel a request at any time up to the point at which the patient is
+        taken on board.
+  \item View the itemised invoice and settle it by UPI, card, net banking or
+        cash.
+  \item Rate a completed trip from one to five stars, with a written comment.
+  \item View every past trip under \textbf{Trips}.
+  \item Report an ambulance crew for misconduct on a trip that has ended.
+\end{itemize}
+
+\subsection{Module overview}
+
+The patient module presents four tabs along the bottom of the screen:
+\textbf{Book}, \textbf{Track}, \textbf{Trips} and \textbf{Account}.
+
+\subsection{Setting the pickup location}
+
+This is the single most important entry on the screen, and so three methods are
+offered. Users may use whichever is quickest in the circumstances.
+
+\begin{itemize}
+  \item \textbf{Use my current location.} The application reads the device GPS.
+        Where a fresh fix is slow to arrive, the last known position is used
+        rather than waiting indefinitely.
+  \item \textbf{Move the map.} The pin remains fixed at the centre of the map
+        while the map itself moves beneath it. Users need to position the map so
+        that the pin sits on the pickup point; the address shown below the map
+        is revised as this is done.
+  \item \textbf{Search for an address.} Users need to type a landmark, for
+        example \textit{NITK Surathkal main gate}, and select the correct entry
+        from the results.
+\end{itemize}
+
+\begin{warnbox}[Confirm the address before requesting]
+The address shown beneath the pin is the address to which the ambulance will be
+sent. Users need to confirm that it reads as a place they recognise before
+placing the request.
+\end{warnbox}
+
+\phoneshot{03-book-pin.jpg}{The booking screen. The pin stays at the centre of
+the map while the map is moved beneath it, and the resolved address is shown
+below.}
+
+\subsection{Choosing the class of ambulance}
+
+Users need to select the class of ambulance required. The classes available are
+listed below.
+
+\begin{reftable}{L{0.22\linewidth} L{0.66\linewidth}}{\thead{Class} & \thead{When it should be selected}}
+\textbf{EMG} \newline Emergency & An ambulance is needed immediately and the user does not know which class is appropriate. Every nearby ambulance is alerted at the same moment and the first to accept is assigned. \\
+\rowcolor{linen}
+\textbf{BLS} & Oxygen, a stretcher and a trained attendant. \\
+\textbf{ALS} & Ventilator, defibrillator and a paramedic. \\
+\rowcolor{linen}
+\textbf{ICU} & Critical care with full patient monitoring. \\
+\textbf{PTV} & A planned, non-emergency transfer between facilities. \\
+\end{reftable}
+
+\begin{notebox}[If in doubt, select Emergency]
+The four ordinary classes are offered to one ambulance at a time, in order of
+rank. An emergency request is offered to every eligible ambulance within range
+simultaneously, and is therefore answered sooner.
+\end{notebox}
+
+\phoneshot{04-ambulance-types.jpg}{The class selection list. Emergency is placed
+first because it is the option a user wants when there is no time to choose.}
+
+\subsection{Placing the request}
+
+\begin{enumerate}
+  \item Users need to enter the patient's name and, where possible, a short note
+        describing the emergency. The note is passed to the crew along with the
+        request.
+  \item The indicative fare is displayed. The final invoice is calculated from
+        the distance actually travelled and will therefore differ from this
+        figure.
+  \item Click on \textbf{Request}.
+\end{enumerate}
+
+The application moves to the \textbf{Track} tab while an ambulance is sought.
+Each ambulance is given 45 seconds in which to answer before the request is
+passed to the next.
+
+\subsection{Tracking the ambulance}
+
+Once an ambulance has accepted the request, the \textbf{Track} tab displays:
+
+\begin{itemize}
+  \item the ambulance moving on a live map, with an estimated time of arrival
+        that is revised as it travels;
+  \item the name of the driver and the registration number of the vehicle;
+  \item the milestones of the trip as they are reached;
+  \item a \textbf{Call driver} button, which places a telephone call to the
+        driver. This should be used if the crew are unable to find the patient;
+  \item a \textbf{Cancel} button, available until the patient is taken on board.
+\end{itemize}
+
+\subsection{Payment, invoice and rating}
+
+When the trip is completed, an itemised invoice is raised and appears under
+\textbf{Trips}. The invoice separates the base fare, the distance charge, any
+class surcharge and tax. Payment may be made by UPI, card, net banking, or in
+cash on completion.
+
+Users are invited to rate the trip from one to five stars and may add a written
+comment. The rating contributes to the ranking used when the same ambulance is
+considered for a future request.
+
+\phonepair{pat-trips.jpg}{Left: the trip history}{pat-invoice.jpg}{Right: the itemised invoice, and the rating given for that trip}
+
+\subsection{Reporting an ambulance crew}
+
+Where the conduct of a crew has fallen short, the patient may report it. The
+procedure is described in Section~\ref{sec:reporting}, which also explains how
+such reports are dealt with.
+
+% =====================================================================
+\section{The ambulance crew module}
+\label{sec:crew}
+
+Drivers and ambulance operators have access to a certain set of actions that can
+be performed within the dispatch console. They are illustrated below.
+
+\subsection{Actions available to the crew}
+
+\begin{itemize}
+  \item Submit a vehicle for verification by the control room.
+  \item Go on duty and off duty.
+  \item Accept or decline a request within the 45 second window allowed.
+  \item Move a trip through its milestones:
+    \begin{itemize}
+      \item On the way, Arrived, On board and Complete.
+    \end{itemize}
+  \item View the route, the pickup point and the vehicle's own position on a
+        live map.
+  \item View earnings, both settled and outstanding, together with a fortnight
+        of history and every past trip.
+  \item Report a passenger for misconduct on a trip that has ended.
+\end{itemize}
+
+\subsection{Submitting the vehicle for verification}
+\label{sec:crewverify}
+
+A newly registered driver or operator cannot receive any request until the
+control room has examined their vehicle. Immediately after registration, users
+are asked to provide its details.
+
+\begin{enumerate}
+  \item Enter the registration number exactly as it is printed on the number
+        plate, without spaces. The format expected is two letters, two digits,
+        two letters and four digits, for example \texttt{KA19CD5678}.
+  \item Select the class of the ambulance: BLS, ALS, ICU or PTV.
+  \item Enter the driving licence number and, where available, a link to scanned
+        supporting documents.
+  \item Click on \textbf{Submit for verification}.
+\end{enumerate}
+
+\begin{warnbox}[The console remains locked until verification]
+Until an administrator has verified the vehicle, the console stays locked and no
+requests whatsoever will be received. The console unlocks by itself at the
+moment verification is granted. Users do not need to sign out and in again, and
+do not need to keep checking.
+\end{warnbox}
+
+\subsection{Going on duty}
+
+Users need to use the switch at the top of the \textbf{Console} tab. While the
+crew are on duty, the application reports the position of the vehicle
+approximately every twenty seconds. This is the information by which the vehicle
+is matched to a nearby patient.
+
+\begin{notebox}[Reporting is what keeps a vehicle dispatchable]
+An ambulance whose application has not reported its position for fifteen minutes
+is taken off duty automatically, because a patient cannot be sent to a vehicle
+whose position is unknown. Where this occurs the crew are informed, and need
+only go on duty again.
+\end{notebox}
+
+\phoneshot{05-driver-console.jpg}{The dispatch console with the crew off duty.
+The switch at the top of the screen begins and ends the shift.}
+
+\subsection{Answering a request}
+
+A request arrives as a card carrying a countdown, and the device sounds and
+vibrates. The crew have \textbf{45 seconds} in which to answer, after which the
+request is passed to the next ambulance.
+
+\begin{itemize}
+  \item A card marked \textbf{EMERGENCY} was sent to every nearby ambulance at
+        the same moment. The first crew to accept are assigned, so hesitation
+        costs the job rather than delaying it.
+  \item Declining passes the request on immediately. A decline is not held
+        against the crew.
+\end{itemize}
+
+\begin{warnbox}[Alerts require the application to be running]
+The application may be in the background and alerts will still sound. If it has
+been closed from the list of recent applications, however, nothing can reach it.
+Crews need to leave the application running for the duration of their shift.
+\end{warnbox}
+
+\subsection{Running the trip}
+
+The \textbf{Trip} tab shows the pickup point, the route and the vehicle's own
+position, and advances through the milestones one at a time. A milestone cannot
+be skipped.
+
+\begin{reftable}{L{0.24\linewidth} L{0.64\linewidth}}{\thead{Milestone} & \thead{To be marked when}}
+\textbf{On the way} & The crew set off towards the pickup point. \\
+\rowcolor{linen}
+\textbf{Arrived} & The crew reach the pickup point. \\
+\textbf{On board} & The patient is inside the ambulance. \textbf{The distance charge begins here.} \\
+\rowcolor{linen}
+\textbf{Complete} & The patient has been handed over. The invoice is raised. \\
+\end{reftable}
+
+\begin{warnbox}[The fare is measured between two of these taps]
+The distance billed is measured by GPS between \textbf{On board} and
+\textbf{Complete}, and not from any figure entered by hand. Marking
+\textbf{On board} late, or \textbf{Complete} early, reduces the amount billed.
+\end{warnbox}
+
+\subsection{Earnings}
+
+The \textbf{Earnings} tab totals the amounts settled and outstanding, and lists
+a fortnight of history together with every past trip. A trip in this list may
+also be the subject of a report, as described in Section~\ref{sec:reporting}.
+
+% =====================================================================
+\section{The control room module}
+\label{sec:control}
+
+Administrators have access to a certain set of actions that can be performed
+within the control room. They are illustrated below. Every screen in this module
+updates by itself as events occur; none of them needs to be reloaded.
+
+\subsection{Actions available to the administrator}
+
+\begin{itemize}
+  \item Monitor the operational position of the whole service in real time.
+  \item Verify, reject or suspend an ambulance submitted by a driver or operator.
+  \item Search, filter and inspect every booking, and for any one of them:
+    \begin{itemize}
+      \item re-run matching on a booking that failed to find an ambulance;
+      \item force the cancellation of a booking that has become stuck.
+    \end{itemize}
+  \item Follow the entire fleet on a map, filtered by availability.
+  \item Review reports made by crews against passengers and by patients against
+        crews, and decide the outcome.
+  \item Produce reports on response time, demand, revenue and provider
+        performance over a chosen date range.
+  \item Inspect the log of every alert the system has sent.
+  \item Inspect the audit trail of every decision and action taken.
+  \item Suspend or reinstate any account.
+\end{itemize}
+
+\subsection{The dispatch overview}
+
+The control room opens on the dispatch overview, which carries the live
+operational picture.
+
+\begin{reftable}{L{0.26\linewidth} L{0.62\linewidth}}{\thead{Figure} & \thead{Meaning}}
+\textbf{Awaiting a match} & Requests that are still being offered to ambulances. \\
+\rowcolor{linen}
+\textbf{Trips in progress} & Trips from assignment through to the patient being on board. \\
+\textbf{Ambulances free} & Vehicles that are verified, on duty and reporting their position: that is, the vehicles that could actually be dispatched at this moment. \\
+\rowcolor{linen}
+\textbf{Not reporting} & Vehicles that are on duty but whose application has fallen silent. These require attention, as they cannot be dispatched. \\
+\end{reftable}
+
+A panel appears at the head of the screen whenever a provider account is waiting
+to be verified, since an unverified ambulance receives no requests at all.
+
+\wideshot{adm-overview.jpg}{The dispatch overview, shown in a desktop browser.
+The figures and the charts below them are revised as events occur.}
+
+\subsection{Verifying an ambulance}
+
+\begin{enumerate}
+  \item Open the \textbf{Providers} tab and filter by \textbf{PENDING}.
+  \item Open the account under examination and read the registration number,
+        the class of vehicle, the licence number and any documents supplied.
+  \item Click on \textbf{Verify} or on \textbf{Reject}, adding a remark that
+        records the reason for the decision.
+\end{enumerate}
+
+The driver is informed at once and their console unlocks by itself. This step is
+what places a vehicle into service, and until it is taken the vehicle receives
+nothing.
+
+\wideshot{adm-providers.jpg}{The provider list. An account awaiting verification
+is highlighted and carries the \textbf{Verify} and \textbf{Reject} actions.}
+
+\subsection{Monitoring bookings}
+
+The \textbf{Bookings} tab lists every booking in the system and may be filtered
+by status, by class of ambulance or by date, or searched by booking
+identifier, address, patient name or telephone number.
+
+Opening a booking presents the complete case file: who requested it, every
+ambulance to which it was offered and what each of them answered, the GPS trace
+of the journey, the invoice, the rating and every alert sent in connection with
+it. Two corrective actions are available from this screen:
+
+\begin{itemize}
+  \item \textbf{Re-dispatch} runs the matching procedure again on a booking that
+        failed to find an ambulance;
+  \item \textbf{Force cancel} closes a booking that has become stuck.
+\end{itemize}
+
+\wideshot{adm-bookings.jpg}{The booking list, filtered by status. The identifier
+of each booking is shown on the right.}
+
+\subsection{The fleet map}
+
+The \textbf{Fleet} tab plots every vehicle known to the system on a map, colour
+coded by availability, with the time at which each last reported its position.
+The list beneath the map may be filtered to vehicles that are available, busy or
+offline.
+
+\wideshot{adm-fleet.jpg}{The fleet map. The time since each vehicle last
+reported is the figure that determines whether it can be dispatched.}
+
+\subsection{Reports, logs and accounts}
+
+The remaining functions of the control room are reached through the
+\textbf{More} menu.
+
+\begin{reftable}{L{0.26\linewidth} L{0.62\linewidth}}{\thead{Entry} & \thead{Contents}}
+\textbf{Passenger reports} & Complaints made by crews against passengers and by patients against crews, with the actions available against each. See Section~\ref{sec:reporting}. \\
+\rowcolor{linen}
+\textbf{Reports} & Response time, demand by class, revenue and provider performance over a chosen date range. \\
+\textbf{Alert log} & Every WhatsApp message, email and push notification the system has sent, with its delivery state. \\
+\rowcolor{linen}
+\textbf{Audit trail} & Every decision and action taken in the system, in order, including those of the administrator reading it. \\
+\textbf{Accounts} & Every patient, driver and operator, with the facility to suspend or reinstate an account. \\
+\end{reftable}
+
+\wideshot{adm-more.jpg}{The control room menu, from which the reporting, logging
+and account functions are reached.}
+
+% =====================================================================
+\section{Reporting misconduct}
+\label{sec:reporting}
+
+A hoax request occupies an ambulance that another patient needed, and a crew who
+behave badly should be answerable for it. The system therefore allows a report
+to be made in either direction, and the procedure is deliberately the same both
+ways.
+
+\begin{notebox}[Making a report decides nothing by itself]
+Filing a report has no effect whatsoever on the account of the person reported.
+The report is placed before the control room, who decide the outcome. No account
+is suspended merely because somebody has said that it should be.
+\end{notebox}
+
+\subsection{A crew reporting a passenger}
+
+\begin{enumerate}
+  \item Open the \textbf{Earnings} tab and locate the trip concerned.
+  \item Click on \textbf{Report this passenger}.
+  \item Select what occurred: a hoax call, the passenger not turning up, abusive
+        or threatening behaviour, a refusal to pay, or some other matter.
+  \item Describe what occurred, briefly and factually, and submit the report.
+\end{enumerate}
+
+\subsection{A patient reporting a crew}
+
+\begin{enumerate}
+  \item Open the \textbf{Trips} tab and locate the trip concerned.
+  \item Click on \textbf{Report this ambulance}.
+  \item Select what occurred: the ambulance never arriving, unsafe driving,
+        rude or abusive behaviour, a demand for more than the invoiced fare, or
+        the condition of the vehicle or its equipment.
+  \item Describe what occurred and submit the report.
+\end{enumerate}
+
+In both directions, a report may only be made by a party to the trip, only once
+per trip, and only after the trip has ended.
+
+\subsection{How the control room decides}
+
+Reports are listed under \textbf{Passenger reports} in the \textbf{More} menu.
+Each entry shows the person reported, the person who reported them, what was
+said, and \textbf{the number of other reports naming the same person together
+with the number that were upheld}. One complaint is an incident; four are a
+pattern, and that distinction is the judgement the administrator is being asked
+to make.
+
+\wideshot{adm-report.jpg}{A report awaiting review. The booking, the pickup
+point, the vehicle and the account status of the person reported are all shown
+alongside the complaint itself.}
+
+\begin{reftable}{L{0.28\linewidth} L{0.60\linewidth}}{\thead{Decision} & \thead{Effect}}
+\textbf{Dismiss} & No action is taken. A report found to be baseless costs the person reported nothing, and so no penalty may be attached to a dismissal. \\
+\rowcolor{linen}
+\textbf{Uphold \textemdash{} warn} & Recorded against the account, with no further effect. \\
+\textbf{Uphold \textemdash{} suspend} & The account is signed out everywhere and locked. A suspended driver is additionally taken off duty, so that no further request can reach them. The suspension may be reversed from \textbf{Accounts}. \\
+\rowcolor{linen}
+\textbf{Uphold \textemdash{} delete} & The name, telephone number and email address are erased and the account is locked. The bookings, invoices and the report itself are retained, because the record has to outlive the person it concerns. This cannot be reversed. \\
+\end{reftable}
+
+Whoever made the report is informed of the outcome in either case.
+
+% =====================================================================
+\section{Troubleshooting}
+\label{sec:trouble}
+
+\begin{center}
+\small
+\begin{longtable}{L{0.32\linewidth} L{0.56\linewidth}}
+\rowcolor{dbimkey}\thead{Message or symptom} & \thead{Action to be taken} \\
+\endfirsthead
+\rowcolor{dbimkey}\thead{Message or symptom} & \thead{Action to be taken} \\
+\endhead
+\textbf{The server did not answer within a minute} &
+The hosted backend is put to sleep when it is not in use and takes roughly
+fifty seconds to wake. Users need to try the operation again; the second
+attempt is prompt. \\
+\rowcolor{linen}
+\textbf{Cannot reach the server} &
+Confirm that the device is online. Where a backend of one's own is being used,
+confirm the address shown on the sign-in screen under \textbf{Backend
+\dots Change}. \\
+\textbf{No GPS fix yet} &
+Move to a position with a clearer view of the sky, or set the pickup point on
+the map instead. The application does not wait indefinitely for a fix. \\
+\rowcolor{linen}
+\textbf{The verification code never arrives} &
+Confirm the spelling of the email address and examine the spam folder. An
+address at a domain that does not exist can never be delivered to. \\
+\textbf{No ambulance could be assigned} &
+No vehicle was free within fifteen kilometres. Users need to try again, select
+\textbf{Emergency} so that every nearby ambulance is asked at once, or
+telephone 108. \\
+\rowcolor{linen}
+\textbf{The dispatch console remains locked} &
+The vehicle has not yet been verified by the control room. The console unlocks
+by itself; nothing needs to be restarted. \\
+\textbf{No alert is received when a request arrives} &
+Open \textbf{Profile}, then \textbf{Alerts}, and click on \textbf{Send a test
+alert}. Alerts require the application to be running; the background is
+sufficient, a closed application is not. \\
+\rowcolor{linen}
+\textbf{The account is suspended} &
+An administrator has suspended the account following a report. Users need to
+contact the control room. \\
+\end{longtable}
+\end{center}
+
+% =====================================================================
+\appendix
+\section{Demonstration accounts}
+\label{app:accounts}
+
+The database supplied with the system is seeded with the accounts below, so that
+each role may be examined without registering.
+
+\begin{reftable}{L{0.26\linewidth} L{0.28\linewidth} L{0.26\linewidth}}{\thead{Role} & \thead{Mobile number} & \thead{Password}}
+Patient & 9800000001 & \texttt{user123} \\
+\rowcolor{linen}
+Driver (ALS) & 9700000002 & \texttt{driver123} \\
+Driver (ICU) & 9700000003 & \texttt{driver123} \\
+\rowcolor{linen}
+Control room & 9000000001 & \texttt{admin123} \\
+\end{reftable}
+
+\begin{notebox}[These are demonstration credentials]
+The accounts above exist only in the seeded development database and carry no
+real personal data. They should be removed before the system is put to any use
+beyond assessment.
+\end{notebox}
+
+% ---------------------------------------------------------------------
+\section{Requirement traceability}
+\label{app:trace}
+
+The table below maps each functional requirement of the Software Requirements
+Specification onto the section of this manual in which it is demonstrated.
+
+\begin{center}
+\small
+\begin{longtable}{L{0.08\linewidth} L{0.50\linewidth} L{0.30\linewidth}}
+\rowcolor{dbimkey}\thead{SRS} & \thead{Requirement} & \thead{Demonstrated in} \\
+\endfirsthead
+\rowcolor{dbimkey}\thead{SRS} & \thead{Requirement} & \thead{Demonstrated in} \\
+\endhead
+F.1 & Registration, OTP verification and password recovery & Sections 2.2 to 2.4 \\
+\rowcolor{linen}
+F.2 & Role-based login & Section 2.1, Section 2.3 \\
+F.3 & Select ambulance type and place booking & Sections 3.4 and 3.5 \\
+\rowcolor{linen}
+F.4 & Capture pickup location & Section 3.3 \\
+F.5 & Match nearest available ambulance & Sections 3.4 and 5.2 \\
+\rowcolor{linen}
+F.6 & Notify driver of a request & Section 4.4 \\
+F.7 & Accept or reject a request & Section 4.4 \\
+\rowcolor{linen}
+F.8 & Live tracking and estimated time of arrival & Sections 3.6 and 5.5 \\
+F.9 & Trip status updates & Section 4.5 \\
+\rowcolor{linen}
+F.10 & Payment and billing & Section 3.7 \\
+F.11 & Booking history and records & Sections 3.7 and 4.6 \\
+\rowcolor{linen}
+F.12 & Rating and feedback & Section 3.7 \\
+F.13 & Administrative management, reports and sanctions & Sections 5 and 6 \\
+\rowcolor{linen}
+F.14 & Notifications and alerts & Section 4.4, Section 5.6, Section 7 \\
+\end{longtable}
+\end{center}
+
+A fuller matrix, which continues from each requirement into the module and the
+source file that implements it, is maintained in \texttt{docs/TRACEABILITY.md}
+in the project repository.
+
+% ---------------------------------------------------------------------
+\section{Document control}
+
+\begin{reftable}{L{0.14\linewidth} L{0.16\linewidth} L{0.46\linewidth}}{\thead{Version} & \thead{Date} & \thead{Summary of change}}
+1.0 & 16 October 2026 & First issue, covering the patient, crew and control room modules. \\
+\end{reftable}
+
+\vspace{10mm}
+\begin{center}
+{\color{greyone}\rule{0.5\linewidth}{0.6pt}}
+
+\vspace{5mm}
+{\small\color{greythree}
+\textbf{Ambulance Booking System} \textemdash{} User Manual, version 1.0\\[2mm]
+Team 16 \textemdash{} Adithya Shyam D (241IT005) \textperiodcentered{}
+Dev Patel (241IT023) \textperiodcentered{} Ritesh Bhagat (241IT063)\\[2mm]
+Department of Information Technology\\
+National Institute of Technology Karnataka, Surathkal}
+\end{center}
+
+\end{document}

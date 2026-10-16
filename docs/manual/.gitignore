@@ -1,0 +1,11 @@
+# XeLaTeX intermediates. build.ps1 removes these, but an editor-run build
+# leaves them behind.
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+
+# The build copies the PDF to docs/USER_MANUAL.pdf, which is the one
+# that is published; keeping a second copy here only doubles the repo.
+user-manual.pdf
