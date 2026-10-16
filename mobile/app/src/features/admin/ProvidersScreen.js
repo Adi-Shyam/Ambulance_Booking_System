@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
 import { confirmAction } from '../../lib/confirm';
 import { VERIFICATION_STATUSES } from '../../lib/config';
-import { colors, radius, relative, spacing, typo } from '../../lib/theme';
+import { FONT, colors, radius, relative, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Button, Card, EmptyState, Field, Loading, Pill, Row, Small } from '../../components/ui';
 
 /**
@@ -92,7 +92,7 @@ export default function ProvidersScreen({ navigation }) {
               onPress={() => setStatus(c.key)}
               style={[styles.chip, status === c.key && styles.chipOn]}
             >
-              <Text style={{ color: status === c.key ? colors.white : colors.muted, fontSize: 12.5, fontWeight: '600' }}>
+              <Text style={{ color: status === c.key ? colors.white : colors.muted, fontSize: 12.5, fontFamily: FONT.semibold }}>
                 {c.label}
               </Text>
             </Pressable>
@@ -112,7 +112,7 @@ export default function ProvidersScreen({ navigation }) {
           <Card key={p.provider_id} style={p.verification_status === 'PENDING' ? { borderColor: colors.warn } : undefined}>
             <Pressable onPress={() => navigation.navigate('AdminProviderDetail', { providerId: p.provider_id })}>
               <View style={styles.head}>
-                <Body style={{ fontWeight: '700' }}>{p.full_name}</Body>
+                <Body style={{ fontFamily: FONT.bold }}>{p.full_name}</Body>
                 <Pill label={p.verification_status} />
               </View>
               <Small style={{ marginTop: 2 }}>{p.phone_no}{p.org_name ? ` · ${p.org_name}` : ''}</Small>

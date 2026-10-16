@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { getSocket, useResync, useSocketEvent } from '../../lib/socket';
 import { MILESTONE_STEPS } from '../../lib/config';
 import { confirmAction } from '../../lib/confirm';
-import { STATUS_TEXT, colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
+import { FONT, STATUS_TEXT, colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Button, Card, EmptyState, H2, Loading, Pill, Row, Small, StepTrail } from '../../components/ui';
 import { callCounterparty } from '../../lib/calling';
 import MapPanel from '../../components/MapPanel';
@@ -153,7 +153,7 @@ export default function TrackScreen({ navigation }) {
           <View style={styles.etaBox}>
             <Text style={styles.etaValue}>{track.trip.eta_minutes}</Text>
             <View>
-              <Body style={{ fontWeight: '700' }}>minutes away</Body>
+              <Body style={{ fontFamily: FONT.bold }}>minutes away</Body>
               <Small>
                 {track.trip.route_distance_km != null ? `${track.trip.route_distance_km} km by road` : ''}
               </Small>
@@ -284,5 +284,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  etaValue: { fontSize: 44, fontWeight: '800', color: colors.ok, lineHeight: 48 },
+  etaValue: { fontSize: 44, fontFamily: FONT.bold, color: colors.ok, lineHeight: 48 },
 });

@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
 import { confirmAction } from '../../lib/confirm';
 import { ROLE_CODES } from '../../lib/config';
-import { colors, radius, spacing, typo } from '../../lib/theme';
+import { FONT, colors, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Button, Card, EmptyState, Field, Loading, Pill, Row, Small } from '../../components/ui';
 
 /**
@@ -91,7 +91,7 @@ export default function UsersScreen() {
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           {[{ key: '', label: 'All' }, ...ROLE_CODES.map((r) => ({ key: r, label: r }))].map((c) => (
             <Pressable key={c.key || 'all'} onPress={() => setRole(c.key)} style={[styles.chip, role === c.key && styles.chipOn]}>
-              <Text style={{ color: role === c.key ? colors.white : colors.muted, fontSize: 12.5, fontWeight: '600' }}>
+              <Text style={{ color: role === c.key ? colors.white : colors.muted, fontSize: 12.5, fontFamily: FONT.semibold }}>
                 {c.label}
               </Text>
             </Pressable>
@@ -107,7 +107,7 @@ export default function UsersScreen() {
         rows.map((u) => (
           <Card key={u.user_id}>
             <View style={styles.head}>
-              <Body style={{ fontWeight: '700' }}>{u.full_name}</Body>
+              <Body style={{ fontFamily: FONT.bold }}>{u.full_name}</Body>
               <Pill label={u.verification_status} />
             </View>
             <Small style={{ marginTop: 2 }}>{u.phone_no}</Small>

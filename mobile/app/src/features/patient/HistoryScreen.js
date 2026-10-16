@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
-import { colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
+import { FONT, colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, EmptyState, Loading, Pill, Small } from '../../components/ui';
 
 // F.11 Booking history and records.
@@ -46,7 +46,7 @@ export default function HistoryScreen({ navigation }) {
               <Small style={typo.tiny}>{item.booking_id}</Small>
             </View>
 
-            <Body style={{ marginTop: spacing.sm, fontWeight: '600' }} numberOfLines={2}>
+            <Body style={{ marginTop: spacing.sm, fontFamily: FONT.semibold }} numberOfLines={2}>
               {item.address_text || `${item.latitude}, ${item.longitude}`}
             </Body>
 

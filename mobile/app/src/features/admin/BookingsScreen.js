@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
 import { BOOKING_STATUSES } from '../../lib/config';
-import { colors, dateTimeOf, money, radius, relative, spacing, typo } from '../../lib/theme';
+import { FONT, colors, dateTimeOf, money, radius, relative, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Card, EmptyState, Field, Loading, Pill, Small } from '../../components/ui';
 
 /**
@@ -82,7 +82,7 @@ export default function BookingsScreen({ navigation }) {
                 }}
                 style={[styles.chip, on && styles.chipOn]}
               >
-                <Text style={{ color: on ? colors.white : colors.muted, fontSize: 12.5, fontWeight: '600' }}>
+                <Text style={{ color: on ? colors.white : colors.muted, fontSize: 12.5, fontFamily: FONT.semibold }}>
                   {c.label}
                 </Text>
               </Pressable>
@@ -106,7 +106,7 @@ export default function BookingsScreen({ navigation }) {
                 <Small style={typo.tiny}>{b.booking_id}</Small>
               </View>
 
-              <Body style={{ marginTop: 6, fontWeight: '600' }} numberOfLines={2}>
+              <Body style={{ marginTop: 6, fontFamily: FONT.semibold }} numberOfLines={2}>
                 {b.address_text || `${b.latitude}, ${b.longitude}`}
               </Body>
 

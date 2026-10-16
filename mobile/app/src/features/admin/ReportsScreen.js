@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { api } from '../../lib/api';
 import { REPORT_TYPES } from '../../lib/config';
-import { colors, money, radius, spacing, typo } from '../../lib/theme';
+import { FONT, colors, money, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Card, EmptyState, Field, H2, Loading, Row, Small } from '../../components/ui';
 
 /**
@@ -77,7 +77,7 @@ export default function ReportsScreen() {
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           {REPORT_TYPES.map((r) => (
             <Pressable key={r.code} onPress={() => setType(r.code)} style={[styles.chip, type === r.code && styles.chipOn]}>
-              <Text style={{ color: type === r.code ? colors.white : colors.muted, fontSize: 12.5, fontWeight: '600' }}>
+              <Text style={{ color: type === r.code ? colors.white : colors.muted, fontSize: 12.5, fontFamily: FONT.semibold }}>
                 {r.label}
               </Text>
             </Pressable>
@@ -181,7 +181,7 @@ export default function ReportsScreen() {
           ) : (
             m.map((p) => (
               <View key={p.provider_id} style={styles.listRow}>
-                <Body style={{ fontWeight: '700' }}>{p.driver_name}</Body>
+                <Body style={{ fontFamily: FONT.bold }}>{p.driver_name}</Body>
                 <Small>{p.vehicle_reg_no} · {p.ambulance_type}</Small>
                 <View style={{ marginTop: 4 }}>
                   <Row label="Trips" value={p.trips} />

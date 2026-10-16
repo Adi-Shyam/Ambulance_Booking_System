@@ -545,6 +545,32 @@ iOS is out of scope: Apple requires a paid Developer Program membership to
 install an app on a device at all, and the build itself needs macOS. The same
 code runs on an iPhone through Expo Go if you ever want to show it.
 
+## Digital Brand Identity Manual
+
+The interface follows the Government of India's Digital Brand Identity Manual
+(DBIM v3, MeitY, January 2025), which applies to government mobile apps
+through Annexure D.
+
+| DBIM | Applied |
+|---|---|
+| 2.1 One primary colour group | **Cinnamon Red** — the manual asks for the group that best represents the organisation's function |
+| 2.2 Functional palette | `#FFFFFF` background, `#150202` text, Linen `#EBEAEA`, greys `#C6C6C6`/`#8E8E8E`/`#606060` |
+| 2.2 Status colours | `#198754` success, `#FFC107` warning, `#DC3545` error, `#0D6EFD` information and links |
+| 4.1 Typeface | **Noto Sans**, bundled in all four weights |
+| 4.3.2 Mobile type scale | H1 24, H2 20, H3 16, body 14, small 13, tiny 12 |
+| D.1.5 Contact | the About panel names the team on every role's profile |
+
+This replaced a dark theme. DBIM mandates Inclusive White as the page
+background with dark text and describes no dark variant, so complying meant
+inverting the design rather than adjusting it. Everything flowed through
+`src/lib/theme.js`, which is what made that a single edit rather than a sweep.
+
+**Not met, and worth saying so rather than implying otherwise:** icons are
+emoji, where section 3 asks for the DBIM toolkit set in PNG/SVG/WEBP at
+24/32/48/64 px. Annexure D also requires NSSO (MeriPehchaan) single sign-on, a
+CERT-IN security audit, the Central Content Publishing System APIs and hosting
+on the Gov.In App Store — none of which a course project can obtain.
+
 ## Notes on scope
 
 - The app uses Leaflet in a WebView for maps rather than `react-native-maps`, so it

@@ -6,7 +6,7 @@ import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
 import { confirmAction } from '../../lib/confirm';
 import { AMBULANCE_TYPES } from '../../lib/config';
-import { colors, money, radius, spacing, typo } from '../../lib/theme';
+import { FONT, colors, money, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Button, Card, Field, H2, Loading, Pill, Small } from '../../components/ui';
 import MapPanel from '../../components/MapPanel';
 
@@ -270,7 +270,7 @@ export default function BookScreen({ navigation }) {
                 <Text
                   style={{
                     fontSize: 15,
-                    fontWeight: t.urgent ? '800' : '600',
+                    fontFamily: t.urgent ? FONT.bold : FONT.semibold,
                     color: selected ? colors.white : t.urgent ? colors.danger : colors.text,
                   }}
                 >
@@ -354,8 +354,8 @@ export default function BookScreen({ navigation }) {
 function FareRow({ label, value, bold }) {
   return (
     <View style={styles.fareRow}>
-      <Text style={[typo.small, bold && { color: colors.text, fontWeight: '700' }]}>{label}</Text>
-      <Text style={[typo.body, bold && { fontWeight: '700', fontSize: 17 }]}>{value}</Text>
+      <Text style={[typo.small, bold && { color: colors.text, fontFamily: FONT.bold }]}>{label}</Text>
+      <Text style={[typo.body, bold && { fontFamily: FONT.bold, fontSize: 17 }]}>{value}</Text>
     </View>
   );
 }

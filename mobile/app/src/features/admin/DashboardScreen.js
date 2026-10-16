@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
-import { colors, money, radius, relative, spacing, typo } from '../../lib/theme';
+import { FONT, colors, money, radius, relative, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Card, H2, Loading, Pill, Small } from '../../components/ui';
 
 /**
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     backgroundColor: colors.surface,
   },
-  statValue: { fontSize: 25, fontWeight: '800', color: colors.text, marginVertical: 2 },
+  statValue: { fontSize: 25, fontFamily: FONT.bold, color: colors.text, marginVertical: 2 },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 8 },
   barTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.bg, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4, backgroundColor: colors.info },

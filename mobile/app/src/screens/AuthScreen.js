@@ -6,7 +6,7 @@ import { ROLES, roleFor } from '../lib/config';
 import { Banner, Body, Button, Card, Field, H1, H2, Small } from '../components/ui';
 import BackendSetting from '../components/BackendSetting';
 import PasswordStrength from '../components/PasswordStrength';
-import { colors, radius, spacing, typo } from '../lib/theme';
+import { FONT, colors, radius, spacing, typo } from '../lib/theme';
 
 /**
  * F.1 Registration and authentication, F.2 role-based login.
@@ -88,7 +88,7 @@ export default function AuthScreen() {
           <Pressable key={r.key} onPress={() => chooseRole(r.key)} style={styles.roleCard}>
             <Text style={{ fontSize: 32 }}>{r.icon}</Text>
             <View style={{ flex: 1 }}>
-              <Body style={{ fontWeight: '700', fontSize: 16 }}>{r.title}</Body>
+              <Body style={{ fontFamily: FONT.bold, fontSize: 16 }}>{r.title}</Body>
               <Small>{r.subtitle}</Small>
             </View>
             <Text style={{ color: colors.muted, fontSize: 22 }}>›</Text>
@@ -225,7 +225,7 @@ export default function AuthScreen() {
               }}
               style={[styles.tab, mode === m && styles.tabActive]}
             >
-              <Text style={{ color: mode === m ? colors.white : colors.muted, fontWeight: '600', fontSize: 13.5 }}>
+              <Text style={{ color: mode === m ? colors.white : colors.muted, fontFamily: FONT.semibold, fontSize: 13.5 }}>
                 {label}
               </Text>
             </Pressable>
@@ -246,7 +246,7 @@ export default function AuthScreen() {
                     onPress={() => setRegRole(o.code)}
                     style={[styles.optionCard, regRole === o.code && styles.optionCardActive]}
                   >
-                    <Body style={{ fontWeight: '700' }}>{o.label}</Body>
+                    <Body style={{ fontFamily: FONT.bold }}>{o.label}</Body>
                     <Small>{o.hint}</Small>
                   </Pressable>
                 ))}

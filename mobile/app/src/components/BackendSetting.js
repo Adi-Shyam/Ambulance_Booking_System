@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { api, isBaseUrlOverridden, resetBaseUrl, setBaseUrl } from '../lib/api';
-import { colors, radius, spacing, typo } from '../lib/theme';
+import { FONT, colors, radius, spacing, typo } from '../lib/theme';
 import { Banner, Button, Field, Small } from './ui';
 
 /**
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: spacing.sm,
   },
-  edit: { color: colors.accent, fontSize: 12, fontWeight: '700' },
+  edit: { color: colors.accent, fontSize: 12, fontFamily: FONT.bold },
   panel: {
     marginTop: spacing.sm,
     padding: spacing.md,

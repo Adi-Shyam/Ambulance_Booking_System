@@ -8,7 +8,7 @@ import { useAuth } from '../../lib/auth';
 import { useResync, useSocketEvent } from '../../lib/socket';
 import { confirmAction } from '../../lib/confirm';
 import { LOCATION_PING_MS } from '../../lib/config';
-import { colors, radius, relative, spacing, typo } from '../../lib/theme';
+import { FONT, colors, radius, relative, spacing, typo } from '../../lib/theme';
 import { Banner, Button, Card, EmptyState, H2, Loading, Pill, Row, Small } from '../../components/ui';
 import MapPanel from '../../components/MapPanel';
 
@@ -444,7 +444,7 @@ export default function DutyScreen({ navigation }) {
               </View>
 
               {offer.broadcast ? (
-                <Small style={{ marginTop: spacing.sm, color: colors.danger, fontWeight: '700' }}>
+                <Small style={{ marginTop: spacing.sm, color: colors.danger, fontFamily: FONT.bold }}>
                   Sent to every ambulance nearby — first to accept takes it.
                 </Small>
               ) : null}
@@ -565,5 +565,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.accent,
   },
-  countdownValue: { fontSize: 26, fontWeight: '800', color: colors.accent, lineHeight: 29 },
+  countdownValue: { fontSize: 26, fontFamily: FONT.bold, color: colors.accent, lineHeight: 29 },
 });

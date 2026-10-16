@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
-import { colors, radius, relative, spacing, typo } from '../../lib/theme';
+import { FONT, colors, radius, relative, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Card, EmptyState, H2, Loading, Pill, Small } from '../../components/ui';
 import MapPanel from '../../components/MapPanel';
 
@@ -97,7 +97,7 @@ export default function FleetScreen({ navigation }) {
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           {[{ key: '', label: `All (${fleet.length})` }, ...['AVAILABLE', 'BUSY', 'OFFLINE'].map((s) => ({ key: s, label: `${s} (${counts[s] || 0})` }))].map((c) => (
             <Pressable key={c.key || 'all'} onPress={() => setFilter(c.key)} style={[styles.chip, filter === c.key && styles.chipOn]}>
-              <Text style={{ color: filter === c.key ? colors.white : colors.muted, fontSize: 12.5, fontWeight: '600' }}>
+              <Text style={{ color: filter === c.key ? colors.white : colors.muted, fontSize: 12.5, fontFamily: FONT.semibold }}>
                 {c.label}
               </Text>
             </Pressable>
@@ -109,7 +109,7 @@ export default function FleetScreen({ navigation }) {
         <Pressable key={v.provider_id} onPress={() => navigation.navigate('Providers', { screen: 'AdminProviderDetail', params: { providerId: v.provider_id } })}>
           <Card>
             <View style={styles.head}>
-              <Body style={{ fontWeight: '700' }}>{v.vehicle_reg_no}</Body>
+              <Body style={{ fontFamily: FONT.bold }}>{v.vehicle_reg_no}</Body>
               <Pill label={v.availability_status} />
             </View>
             <Small style={{ marginTop: 2 }}>{v.driver_name} · {v.ambulance_type}</Small>

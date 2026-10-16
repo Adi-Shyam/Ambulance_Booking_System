@@ -4,7 +4,7 @@ import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/api';
 import { AMBULANCE_TYPES } from '../../lib/config';
 import { Banner, Body, Button, Card, Field, H1, H2, Small } from '../../components/ui';
-import { colors, radius, spacing, typo } from '../../lib/theme';
+import { FONT, colors, radius, spacing, typo } from '../../lib/theme';
 
 /**
  * D2 - the vehicle record. A signed-in driver with no ambulance profile cannot
@@ -90,7 +90,7 @@ export default function ProfileSetupScreen() {
               >
                 <Text style={{ fontSize: 24 }}>{t.icon}</Text>
                 <View style={{ flex: 1 }}>
-                  <Body style={{ fontWeight: '700' }}>{t.code} — {t.label}</Body>
+                  <Body style={{ fontFamily: FONT.bold }}>{t.code} — {t.label}</Body>
                   <Small>{t.hint}</Small>
                 </View>
               </Pressable>

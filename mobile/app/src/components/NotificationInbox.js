@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../lib/api';
 import { useResync, useSocketEvent } from '../lib/socket';
-import { colors, radius, relative, spacing, typo } from '../lib/theme';
+import { FONT, colors, radius, relative, spacing, typo } from '../lib/theme';
 import { Body, Button, Card, H2, Small } from './ui';
 
 /**
@@ -62,7 +62,7 @@ export default function NotificationInbox({ title = 'Notifications', limit = 25 
         <>
           {notifications.slice(0, limit).map((n) => (
             <View key={n.id} style={[styles.notif, !n.read_flag && { borderLeftColor: colors.accent }]}>
-              <Body style={{ fontWeight: '600' }}>{n.title}</Body>
+              <Body style={{ fontFamily: FONT.semibold }}>{n.title}</Body>
               {n.body ? <Small style={{ marginTop: 2 }}>{n.body}</Small> : null}
               <Text style={[typo.tiny, { marginTop: 4 }]}>{relative(n.created_at)}</Text>
             </View>
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     alignItems: 'center',
   },
-  badgeText: { color: colors.white, fontSize: 12, fontWeight: '700' },
+  badgeText: { color: colors.white, fontSize: 12, fontFamily: FONT.bold },
   notif: {
     borderLeftWidth: 3,
     borderLeftColor: colors.line,

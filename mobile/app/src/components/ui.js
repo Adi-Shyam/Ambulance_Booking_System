@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { STATUS_COLOR, colors, radius, spacing, typo } from '../lib/theme';
+import { FONT, STATUS_COLOR, colors, radius, spacing, typo } from '../lib/theme';
 
 export function Screen({ children, style }) {
   return <View style={[styles.screen, style]}>{children}</View>;
@@ -26,7 +26,9 @@ export function Button({ title, onPress, variant = 'primary', disabled, loading,
   const tone = {
     primary: { bg: colors.accent, fg: colors.white },
     secondary: { bg: colors.surface2, fg: colors.text },
-    success: { bg: colors.ok, fg: '#06281a' },
+    // White on Liberty Green clears 4.5:1; the dark green it used to carry was
+    // chosen for a dark surface that no longer exists.
+    success: { bg: colors.ok, fg: colors.white },
     ghost: { bg: 'transparent', fg: colors.muted },
   }[variant];
 
@@ -70,7 +72,7 @@ export function Pill({ label, tone }) {
   const color = tone || STATUS_COLOR[label] || colors.muted;
   return (
     <View style={[styles.pill, { backgroundColor: `${color}26`, borderColor: `${color}66` }]}>
-      <Text style={{ color, fontSize: 11.5, fontWeight: '700', letterSpacing: 0.3 }}>{label}</Text>
+      <Text style={{ color, fontSize: 11.5, fontFamily: FONT.bold, letterSpacing: 0.3 }}>{label}</Text>
     </View>
   );
 }
@@ -89,7 +91,7 @@ export function Row({ label, value, valueStyle }) {
   return (
     <View style={styles.row}>
       <Text style={[typo.small, { flex: 1 }]}>{label}</Text>
-      <Text style={[typo.body, { fontWeight: '600', textAlign: 'right', flexShrink: 1 }, valueStyle]}>
+      <Text style={[typo.body, { fontFamily: FONT.semibold, textAlign: 'right', flexShrink: 1 }, valueStyle]}>
         {value}
       </Text>
     </View>
@@ -135,7 +137,7 @@ export function StepTrail({ steps, currentIndex }) {
               <Text style={{
                 fontSize: 14.5,
                 color: active ? colors.text : done ? colors.text : colors.muted,
-                fontWeight: active ? '700' : '500',
+                fontFamily: active ? FONT.bold : FONT.medium,
               }}>
                 {s.label}
               </Text>
@@ -166,7 +168,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 50,
   },
-  buttonText: { fontSize: 16, fontWeight: '700' },
+  buttonText: { fontSize: 16, fontFamily: FONT.bold },
   fieldLabel: { ...typo.small, marginBottom: 6 },
   input: {
     backgroundColor: colors.bg,

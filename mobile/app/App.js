@@ -6,8 +6,16 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
 
+import {
+  useFonts,
+  NotoSans_400Regular,
+  NotoSans_500Medium,
+  NotoSans_600SemiBold,
+  NotoSans_700Bold,
+} from '@expo-google-fonts/noto-sans';
+
 import { AuthProvider, useAuth } from './src/lib/auth';
-import { colors } from './src/lib/theme';
+import { FONT, colors } from './src/lib/theme';
 import { Loading } from './src/components/ui';
 
 import AuthScreen from './src/screens/AuthScreen';
@@ -50,7 +58,9 @@ const Stack = createNativeStackNavigator();
 
 const navTheme = {
   ...DefaultTheme,
-  dark: true,
+  // DBIM 2.2: Inclusive White is the primary page background, with dark text
+  // on it. The manual describes no dark variant.
+  dark: false,
   colors: {
     ...DefaultTheme.colors,
     primary: colors.accent,
@@ -70,7 +80,7 @@ const screenOptions = {
   tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.line, height: 62, paddingBottom: 8, paddingTop: 6 },
   tabBarActiveTintColor: colors.accent,
   tabBarInactiveTintColor: colors.muted,
-  tabBarLabelStyle: { fontSize: 11.5, fontWeight: '600' },
+  tabBarLabelStyle: { fontSize: 11.5, fontFamily: FONT.semibold },
 };
 
 const stackOptions = {
@@ -190,11 +200,26 @@ function Root() {
 }
 
 export default function App() {
+  // DBIM 4.1.1 mandates Noto Sans. Rendering before it loads would show one
+  // frame in the system face and then reflow every screen, so the app waits -
+  // the files are bundled, so the wait is a frame or two, not a download.
+  const [fontsReady] = useFonts({
+    NotoSans_400Regular,
+    NotoSans_500Medium,
+    NotoSans_600SemiBold,
+    NotoSans_700Bold,
+  });
+
+  if (!fontsReady) {
+    return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  }
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
         <NavigationContainer theme={navTheme}>
-          <StatusBar style="light" />
+          {/* Dark glyphs, because the bar now sits on a white header. */}
+          <StatusBar style="dark" />
           <Root />
         </NavigationContainer>
       </AuthProvider>

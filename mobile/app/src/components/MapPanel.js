@@ -111,7 +111,7 @@ function WebMap({ markers = [], route = [], height = 260, onPick, zoom = 14 }) {
         ref: frameRef,
         srcDoc: html,
         onLoad: () => frameRef.current?.contentWindow?.applyState?.(JSON.parse(payload)),
-        style: { width: '100%', height: '100%', border: 0, background: '#0b1119' },
+        style: { width: '100%', height: '100%', border: 0, background: colors.surface2 },
         title: 'map',
       })}
     </View>
@@ -126,7 +126,7 @@ function buildHtml(zoom, pickable) {
   // asks apps not to lean on them.
   const tiles = MAPTILER_KEY
     ? {
-        url: `https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`,
+        url: `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`,
         attribution: '&copy; MapTiler &copy; OpenStreetMap',
       }
     : {
@@ -142,9 +142,9 @@ function buildHtml(zoom, pickable) {
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  html, body, #map { height: 100%; margin: 0; background: #0b1119; }
-  .leaflet-control-attribution { font-size: 9px; background: rgba(0,0,0,.5); color: #93a4bb; }
-  .leaflet-control-attribution a { color: #8db4ff; }
+  html, body, #map { height: 100%; margin: 0; background: ${colors.surface2}; }
+  .leaflet-control-attribution { font-size: 9px; background: rgba(255,255,255,.75); color: ${colors.muted}; }
+  .leaflet-control-attribution a { color: ${colors.info}; }
 
   /* A pin, not a dot. A circle marks an area; a pin marks a point, and the
      point is the whole question being asked here - where exactly are you. */
@@ -169,7 +169,7 @@ function buildHtml(zoom, pickable) {
   .crosshair-dot {
     position: absolute; left: 50%; top: 50%;
     width: 6px; height: 6px; margin: -3px 0 0 -3px;
-    border-radius: 50%; background: rgba(230,57,70,.9);
+    border-radius: 50%; background: ${colors.accent};
     box-shadow: 0 0 0 2px rgba(255,255,255,.55);
     z-index: 599; pointer-events: none;
   }
@@ -178,7 +178,7 @@ function buildHtml(zoom, pickable) {
   .hint {
     position: absolute; left: 50%; transform: translateX(-50%);
     bottom: 8px; z-index: 500;
-    background: rgba(11,17,25,.82); color: #e8eef7;
+    background: rgba(21,2,2,.82); color: #FFFFFF;
     font: 11px/1.4 -apple-system, Roboto, sans-serif;
     padding: 4px 10px; border-radius: 999px; white-space: nowrap;
     pointer-events: none;
@@ -270,8 +270,8 @@ ${pickable ? `
     if (state.route && state.route.length > 1) {
       // Drawn twice: a dark casing under a bright line, so the route stays
       // legible over both pale streets and dark parkland.
-      L.polyline(state.route, { color: '#0b1119', weight: 9, opacity: 0.55 }).addTo(layer);
-      L.polyline(state.route, { color: '#e63946', weight: 5, opacity: 0.95 }).addTo(layer);
+      L.polyline(state.route, { color: '#FFFFFF', weight: 9, opacity: 0.9 }).addTo(layer);
+      L.polyline(state.route, { color: '${colors.accent}', weight: 5, opacity: 0.95 }).addTo(layer);
       pts = pts.concat(state.route);
     }
 
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.line,
-    backgroundColor: '#0b1119',
+    backgroundColor: colors.surface2,
   },
-  web: { flex: 1, backgroundColor: '#0b1119' },
+  web: { flex: 1, backgroundColor: colors.surface2 },
 });

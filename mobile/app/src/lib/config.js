@@ -104,6 +104,22 @@ export function modeForRoleCode(roleCode) {
  */
 export const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY || '6mLLgOMyLQp0DFy6CtAC';
 
+/** Team 16. */
+export const TEAM = [
+  { name: 'Adithya Shyam D', roll: '241IT005' },
+  { name: 'Dev Patel', roll: '241IT023' },
+  { name: 'Ritesh Bhagat', roll: '241IT063' },
+];
+
+/**
+ * Where the user manual lives.
+ *
+ * Empty until the PDF is uploaded somewhere it can be opened from - a raw
+ * GitHub link to docs/ is enough. Setting it turns the placeholder in the
+ * About panel into a working button with no code change.
+ */
+export const USER_MANUAL_URL = process.env.EXPO_PUBLIC_USER_MANUAL_URL || '';
+
 export const AMBULANCE_TYPES = [
   {
     code: 'EMG',

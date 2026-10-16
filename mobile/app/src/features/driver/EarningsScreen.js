@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
-import { colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
+import { FONT, colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Card, EmptyState, H2, Loading, Pill, Row, Small } from '../../components/ui';
 
 /** F.11 records and the earnings side of F.10. */
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.line,
   },
-  figureValue: { fontSize: 20, fontWeight: '800', color: colors.ok, marginBottom: 2 },
+  figureValue: { fontSize: 20, fontFamily: FONT.bold, color: colors.ok, marginBottom: 2 },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 8 },
   barTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.bg, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4, backgroundColor: colors.ok },

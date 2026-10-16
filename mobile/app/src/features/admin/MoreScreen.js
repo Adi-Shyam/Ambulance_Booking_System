@@ -2,10 +2,11 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../../lib/auth';
 import { api } from '../../lib/api';
 import { confirmAction } from '../../lib/confirm';
-import { colors, radius, spacing } from '../../lib/theme';
+import { FONT, colors, radius, spacing } from '../../lib/theme';
 import { Body, Button, Card, H2, Small } from '../../components/ui';
 import NotificationInbox from '../../components/NotificationInbox';
 import AlertSettings from '../../components/AlertSettings';
+import AboutPanel from '../../components/AboutPanel';
 
 /**
  * The control room has more screens than a phone has room for tabs, so the
@@ -36,7 +37,7 @@ export default function MoreScreen({ navigation }) {
         <Pressable key={it.route} onPress={() => navigation.navigate(it.route)} style={styles.item}>
           <Text style={{ fontSize: 24 }}>{it.icon}</Text>
           <View style={{ flex: 1 }}>
-            <Body style={{ fontWeight: '700' }}>{it.title}</Body>
+            <Body style={{ fontFamily: FONT.bold }}>{it.title}</Body>
             <Small>{it.hint}</Small>
           </View>
           <Text style={{ color: colors.muted, fontSize: 20 }}>›</Text>
@@ -46,6 +47,8 @@ export default function MoreScreen({ navigation }) {
       <AlertSettings title="Alerts" />
 
       <NotificationInbox title="Control room notifications" />
+
+      <AboutPanel />
 
       <Button
         title="Sign out"
