@@ -172,7 +172,7 @@ export default function BookScreen({ navigation }) {
       <Card>
         <H2>Where are you?</H2>
         <Small style={{ marginTop: 4, marginBottom: spacing.md }}>
-          Tap the map to move the pin, or search for a landmark.
+          Move the map so the pin sits on you, or search for a landmark.
         </Small>
 
         <MapPanel

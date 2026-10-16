@@ -152,6 +152,28 @@ function buildHtml(zoom, pickable) {
   .pin-pickup { font-size: 32px; line-height: 32px; }
   .pin.dragging { opacity: .6; }
 
+  /* The aiming pin: fixed to the centre of the viewport while the map moves
+     under it. This is how every ride-hailing app asks "where are you", and it
+     solves the thing a tappable-but-empty map cannot - there is a pin to see
+     and aim with before anything has been chosen. */
+  .crosshair {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -100%);
+    font-size: 34px; line-height: 34px; z-index: 600;
+    pointer-events: none;
+    filter: drop-shadow(0 3px 4px rgba(0,0,0,.65));
+    transition: transform .12s ease-out;
+  }
+  .crosshair.lifted { transform: translate(-50%, -115%); }
+  /* The spot the pin is actually pointing at. */
+  .crosshair-dot {
+    position: absolute; left: 50%; top: 50%;
+    width: 6px; height: 6px; margin: -3px 0 0 -3px;
+    border-radius: 50%; background: rgba(230,57,70,.9);
+    box-shadow: 0 0 0 2px rgba(255,255,255,.55);
+    z-index: 599; pointer-events: none;
+  }
+
   /* Says the pin can be moved, without a tooltip nobody reads. */
   .hint {
     position: absolute; left: 50%; transform: translateX(-50%);
@@ -165,7 +187,10 @@ function buildHtml(zoom, pickable) {
 </head>
 <body>
 <div id="map"></div>
-${pickable ? '<div class="hint" id="hint">Tap the map or drag the pin</div>' : ''}
+${pickable ? `
+<div class="crosshair-dot"></div>
+<div class="crosshair" id="crosshair">📍</div>
+<div class="hint" id="hint">Move the map to place the pin</div>` : ''}
 <script>
   var map = L.map('map', { zoomControl: false, attributionControl: true }).setView([13.0104, 74.7942], ${zoom});
   L.tileLayer('${tiles.url}', { maxZoom: 20, attribution: '${tiles.attribution}' }).addTo(map);
@@ -173,6 +198,9 @@ ${pickable ? '<div class="hint" id="hint">Tap the map or drag the pin</div>' : '
   var layer = L.layerGroup().addTo(map);
   var lastSignature = '';
   var pickMarker = null;
+  // Set before the map is moved by code rather than by a finger, so the
+  // moveend handler can tell the two apart.
+  var suppressMoveReport = false;
 
   function post(obj) {
     var payload = JSON.stringify(obj);
@@ -206,6 +234,9 @@ ${pickable ? '<div class="hint" id="hint">Tap the map or drag the pin</div>' : '
     (state.markers || []).forEach(function (m) {
       var glyph = m.glyph || '📍';
       var isPickup = m.kind === 'pickup';
+      // The centre pin already marks the pickup while picking, so drawing a
+      // second one under it would be two pins for one place.
+      if (isPickup && ${pickable}) return;
       var marker = L.marker([m.latitude, m.longitude], {
         icon: pinIcon(glyph, isPickup),
         // Only the pickup pin moves: dragging an ambulance would be fiction.
@@ -244,16 +275,37 @@ ${pickable ? '<div class="hint" id="hint">Tap the map or drag the pin</div>' : '
       pts = pts.concat(state.route);
     }
 
-    if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(0.28));
-    else if (pts.length === 1) map.setView(pts[0], Math.max(map.getZoom(), ${zoom}));
+    if (pts.length > 1) {
+      suppressMoveReport = true;
+      map.fitBounds(L.latLngBounds(pts).pad(0.28));
+    } else if (pts.length === 1) {
+      suppressMoveReport = true;
+      map.setView(pts[0], Math.max(map.getZoom(), ${zoom}));
+    }
   };
 
   ${pickable ? `
+  var crosshair = document.getElementById('crosshair');
+  var hint = document.getElementById('hint');
+
+  // Lifting the pin while the map moves reads as "picking it up", and gives
+  // the eye something to follow.
+  map.on('movestart', function () { crosshair.classList.add('lifted'); });
+
+  map.on('moveend', function () {
+    crosshair.classList.remove('lifted');
+    // Only report a position the person actually chose. Programmatic moves -
+    // fitting bounds around a route, centring on a search result - would
+    // otherwise rewrite the pickup under them.
+    if (suppressMoveReport) { suppressMoveReport = false; return; }
+    var c = map.getCenter();
+    hint.textContent = 'Pin set — move the map to adjust';
+    post({ type: 'pick', lat: c.lat, lng: c.lng });
+  });
+
   map.on('click', function (e) {
-    // Move the pin immediately rather than waiting for the round trip, so the
-    // map answers the tap at once and the state catches up.
-    if (pickMarker) pickMarker.setLatLng(e.latlng);
-    post({ type: 'pick', lat: e.latlng.lat, lng: e.latlng.lng });
+    // A tap recentres, which then reports through moveend above.
+    map.panTo(e.latlng);
   });` : ''}
 
   post({ type: 'ready' });
