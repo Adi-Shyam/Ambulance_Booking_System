@@ -558,4 +558,166 @@ router.get('/audit', asyncRoute(async (req, res) => {
   });
 }));
 
+// --------------------------------------------------- F.13 passenger reports
+/**
+ * What the crews have reported, newest first.
+ *
+ * Carries the subject's history alongside each report, because one complaint
+ * is an incident and four are a pattern - and that difference is the whole
+ * judgement being asked for here.
+ */
+router.get('/reports', asyncRoute(async (req, res) => {
+  const where = [];
+  const params = [];
+  if (req.query.report_status) {
+    where.push('r.report_status = ?');
+    params.push(v.oneOf(req.query.report_status, ['OPEN', 'UPHELD', 'DISMISSED'], 'report_status'));
+  }
+
+  const rows = db.prepare(
+    `SELECT r.*,
+            b.address_text, b.ambulance_type, b.booking_timestamp, b.booking_status,
+            subject.full_name  AS reported_name,
+            subject.phone_no   AS reported_phone,
+            subject.email_id   AS reported_email,
+            subject.verification_status AS reported_status,
+            crew.full_name     AS reporter_name,
+            p.vehicle_reg_no
+     FROM reports r
+     JOIN bookings b    ON b.booking_id = r.booking_id
+     JOIN users subject ON subject.user_id = r.reported_user_id
+     JOIN users crew    ON crew.user_id = r.reporter_user_id
+     LEFT JOIN providers p ON p.provider_id = r.provider_id
+     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+     ORDER BY r.created_at DESC
+     LIMIT 200`
+  ).all(...params);
+
+  const priors = db.prepare(
+    `SELECT reported_user_id,
+            COUNT(*) AS total,
+            SUM(CASE WHEN report_status = 'UPHELD' THEN 1 ELSE 0 END) AS upheld
+     FROM reports GROUP BY reported_user_id`
+  ).all();
+  const byUser = Object.fromEntries(priors.map((p) => [p.reported_user_id, p]));
+
+  res.json({
+    reports: rows.map((r) => ({
+      ...r,
+      reports_against_subject: byUser[r.reported_user_id]?.total || 1,
+      upheld_against_subject: byUser[r.reported_user_id]?.upheld || 0,
+    })),
+    open: rows.filter((r) => r.report_status === 'OPEN').length,
+  });
+}));
+
+/**
+ * Rules on a report, and carries out whatever the ruling implies.
+ *
+ * The ruling and the sanction are one action because they are one decision,
+ * and recording them apart invites a suspension nobody can trace back to a
+ * reason (C.5).
+ *
+ * `action` is NONE, WARN, SUSPEND or DELETE. Dismissing allows only NONE: a
+ * report found baseless must not cost the passenger anything.
+ */
+router.post('/reports/:reportId/review', asyncRoute(async (req, res) => {
+  const report = db.prepare('SELECT * FROM reports WHERE report_id = ?').get(req.params.reportId);
+  if (!report) return res.status(404).json({ error: 'Report not found' });
+  if (report.report_status !== 'OPEN') {
+    return res.status(409).json({ error: `This report was already ${report.report_status.toLowerCase()}` });
+  }
+
+  const report_status = v.oneOf(req.body.report_status, ['UPHELD', 'DISMISSED'], 'report_status');
+  const action = v.oneOf(req.body.action || 'NONE', ['NONE', 'WARN', 'SUSPEND', 'DELETE'], 'action');
+  const review_remarks = v.text(req.body.review_remarks, 500, 'review_remarks');
+
+  if (report_status === 'DISMISSED' && action !== 'NONE') {
+    return res.status(400).json({ error: 'A dismissed report cannot carry a penalty', field: 'action' });
+  }
+
+  const subject = db.prepare('SELECT * FROM users WHERE user_id = ?').get(report.reported_user_id);
+  if (!subject) return res.status(404).json({ error: 'The reported account no longer exists' });
+  if (subject.role_code === 'ADMIN') {
+    return res.status(403).json({ error: 'Administrator accounts cannot be sanctioned here' });
+  }
+
+  const now = nowIso();
+
+  if (action === 'SUSPEND' || action === 'DELETE') {
+    db.prepare('UPDATE users SET verification_status = ?, updated_at = ? WHERE user_id = ?')
+      .run('SUSPENDED', now, subject.user_id);
+
+    // Every live session ends at once. A suspension that leaves somebody
+    // signed in until their token expires is not a suspension.
+    db.prepare('UPDATE sessions SET revoked = 1, revoked_at = ? WHERE user_id = ? AND revoked = 0')
+      .run(now, subject.user_id);
+  }
+
+  if (action === 'DELETE') {
+    // Erasure by anonymisation, not by DROP.
+    //
+    // The rows cannot go: bookings, invoices and the audit trail all point at
+    // this account, and C.5 requires those to survive for dispute resolution -
+    // including the dispute that led here. Removing the person while keeping
+    // the record is what erasure means when records must be retained.
+    //
+    // The identifiers are replaced rather than blanked because both columns
+    // are UNIQUE, and a blank would collide with the next deletion.
+    db.prepare(
+      `UPDATE users
+       SET full_name = 'Deleted account', phone_no = ?, email_id = ?,
+           password_hash = NULL, email_verified = 0, phone_verified = 0, updated_at = ?
+       WHERE user_id = ?`
+    ).run(`deleted-${subject.user_id}`, `deleted-${subject.user_id}@invalid`, now, subject.user_id);
+
+    db.prepare('DELETE FROM push_tokens WHERE user_id = ?').run(subject.user_id);
+  }
+
+  db.prepare(
+    `UPDATE reports
+     SET report_status = ?, action_taken = ?, review_remarks = ?, reviewed_by = ?, reviewed_at = ?
+     WHERE report_id = ?`
+  ).run(report_status, action, review_remarks || null, req.user.user_id, now, report.report_id);
+
+  audit('REPORT_REVIEWED', {
+    actorUserId: req.user.user_id, actorRole: 'ADMIN',
+    entityType: 'report', entityId: report.report_id,
+    details: {
+      report_status, action,
+      reported_user_id: report.reported_user_id,
+      booking_id: report.booking_id,
+    },
+  });
+
+  // The crew who filed it hears the outcome. A report that disappears into a
+  // control room is one nobody files twice.
+  notifications.notify(report.reporter_user_id, {
+    title: report_status === 'UPHELD' ? 'Your report was upheld' : 'Your report was reviewed',
+    body: report_status === 'UPHELD'
+      ? `The control room acted on your report of ${report.booking_id}.`
+      : `The control room found no action was needed on ${report.booking_id}.`,
+    eventType: 'REPORT_REVIEWED',
+    bookingId: report.booking_id,
+  });
+
+  if (action === 'SUSPEND') {
+    notifications.notify(subject.user_id, {
+      title: 'Your account has been suspended',
+      body: review_remarks || 'Contact the control room for details.',
+      eventType: 'ACCOUNT_SUSPENDED',
+    });
+  }
+
+  sockets.toAdmins('admin:report:update', { report_id: report.report_id, report_status, action });
+
+  res.json({
+    message: report_status === 'UPHELD'
+      ? `Report upheld${action === 'NONE' ? '' : ` and the account was ${action.toLowerCase()}d`}`
+      : 'Report dismissed',
+    report_status,
+    action,
+  });
+}));
+
 module.exports = router;

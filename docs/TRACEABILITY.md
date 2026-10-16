@@ -19,7 +19,7 @@ specification item can be checked against its implementation.
 | F.10 | Payment and billing | 0.5.1 Calculate Fare, 0.5.2 Process Payment | `services/fare.js`, `services/payments.js`, `routes/payments.js` | Patient `BookingDetailScreen` |
 | F.11 | Booking history and records | 0.5.3 Record History & Feedback | `GET /api/bookings`, `GET /api/provider/trips` | `HistoryScreen`, `EarningsScreen` |
 | F.12 | Rating and feedback | 0.5.3 Record History & Feedback | `routes/bookings.js` `POST /:id/rating` | Star rating on a completed trip |
-| F.13 | Administrative management | 0.6.1 Verify & Manage Providers, 0.6.2 Monitor Bookings, 0.6.3 Reports & Analytics | `routes/admin.js` | Whole dashboard |
+| F.13 | Administrative management, including passenger reports and sanctions | 0.6.1 Verify & Manage Providers, 0.6.2 Monitor Bookings, 0.6.3 Reports & Analytics | `routes/admin.js` | Whole dashboard |
 | F.14 | Notifications and alerts | 0.3.2, 0.4.3, 0.6.3 | `services/notifications.js`, `messaging.js`, `push.js` | In-app inbox, WhatsApp, email, and Expo push for a closed app; `AlertSettings` to verify delivery |
 
 ## Data stores

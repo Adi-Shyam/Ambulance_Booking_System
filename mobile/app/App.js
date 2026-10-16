@@ -43,6 +43,7 @@ import ProvidersScreen from './src/features/admin/ProvidersScreen';
 import ProviderDetailScreen from './src/features/admin/ProviderDetailScreen';
 import MoreScreen from './src/features/admin/MoreScreen';
 import ReportsScreen from './src/features/admin/ReportsScreen';
+import PassengerReportsScreen from './src/features/admin/PassengerReportsScreen';
 import MessagesScreen from './src/features/admin/MessagesScreen';
 import AuditScreen from './src/features/admin/AuditScreen';
 import UsersScreen from './src/features/admin/UsersScreen';
@@ -156,6 +157,11 @@ function AdminMoreStack() {
     <Stack.Navigator screenOptions={stackOptions}>
       <Stack.Screen name="AdminMore" component={MoreScreen} options={{ title: 'More' }} />
       <Stack.Screen name="AdminReports" component={ReportsScreen} options={{ title: 'Reports' }} />
+      <Stack.Screen
+        name="AdminPassengerReports"
+        component={PassengerReportsScreen}
+        options={{ title: 'Passenger reports' }}
+      />
       <Stack.Screen name="AdminMessages" component={MessagesScreen} options={{ title: 'Alert log' }} />
       <Stack.Screen name="AdminAudit" component={AuditScreen} options={{ title: 'Audit trail' }} />
       <Stack.Screen name="AdminUsers" component={UsersScreen} options={{ title: 'Accounts' }} />

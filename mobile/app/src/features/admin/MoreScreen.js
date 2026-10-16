@@ -14,6 +14,7 @@ import AboutPanel from '../../components/AboutPanel';
  * they are all still one tap away.
  */
 const ITEMS = [
+  { route: 'AdminPassengerReports', icon: '🛡️', title: 'Passenger reports', hint: 'What the crews have reported, and what to do about it' },
   { route: 'AdminReports', icon: '📊', title: 'Reports', hint: 'Response time, demand, revenue, provider performance' },
   { route: 'AdminMessages', icon: '📨', title: 'Alert log', hint: 'Every WhatsApp and SMS the system sent' },
   { route: 'AdminAudit', icon: '📜', title: 'Audit trail', hint: 'Every decision and action, in order' },

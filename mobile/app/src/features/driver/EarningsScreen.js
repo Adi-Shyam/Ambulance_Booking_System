@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
 import { FONT, colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Card, EmptyState, H2, Loading, Pill, Row, Small } from '../../components/ui';
+import ReportPassenger from '../../components/ReportPassenger';
 
 /** F.11 records and the earnings side of F.10. */
 export default function EarningsScreen() {
@@ -111,6 +112,17 @@ export default function EarningsScreen() {
                 {t.rating_value ? <Row label="Rating" value={`${t.rating_value} ★`} /> : null}
                 {t.feedback_text ? <Row label="Feedback" value={t.feedback_text} /> : null}
               </View>
+
+              {/*
+                Here rather than on the live trip screen: a crew deals with
+                the emergency first and the paperwork afterwards, and by this
+                point the trip is over and the detail is still fresh.
+              */}
+              <ReportPassenger
+                bookingId={t.booking_id}
+                existing={t}
+                onFiled={load}
+              />
             </View>
           ))
         )}

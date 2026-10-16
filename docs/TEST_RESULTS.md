@@ -2,7 +2,7 @@
 
 Ambulance Booking System — Team 16, IT303.
 
-Generated from an actual run by `npm run test:report` on 2026-10-15T23:04:11.784Z.
+Generated from an actual run by `npm run test:report` on 2026-10-16T03:55:30.238Z.
 Do not edit by hand; re-run the command instead.
 
 ## Summary
@@ -10,11 +10,11 @@ Do not edit by hand; re-run the command instead.
 | Level | Purpose | Tests | Passed | Failed |
 |---|---|---|---|---|
 | Unit | One module in isolation | 91 | 91 | 0 |
-| Integration | Modules working together over HTTP and the database | 121 | 121 | 0 |
+| Integration | Modules working together over HTTP and the database | 136 | 136 | 0 |
 | System | Whole-system behaviour and failure recovery | 11 | 11 | 0 |
-| **Total** | | **223** | **223** | **0** |
+| **Total** | | **238** | **238** | **0** |
 
-All 223 tests passed.
+All 238 tests passed.
 
 ## Unit tests
 
@@ -110,8 +110,23 @@ All 223 tests passed.
 | 63 | a reset will not accept a weak new password | Pass |
 | 64 | a sign-in code cannot be used to reset a password | Pass |
 | 65 | a reset code is single use | Pass |
-| 66 | signing in writes to D1 (DFD 0.1.3) | Pass |
-| 67 | a user can see and end their sessions | Pass |
+| 66 | a driver who adds a vehicle mid-session still reaches their own room | Pass |
+| 67 | the status the driver can fetch matches what the event said | Pass |
+| 68 | an account with no vehicle joins no provider room | Pass |
+| 69 | the crew that attended can report the passenger | Pass |
+| 70 | filing a report does not touch the account it names | Pass |
+| 71 | an ambulance that did not attend cannot report the booking | Pass |
+| 72 | the same crew cannot report one booking twice | Pass |
+| 73 | a reason of OTHER has to say what happened | Pass |
+| 74 | a trip still running cannot be reported | Pass |
+| 75 | the control room sees the report with the history behind it | Pass |
+| 76 | a dismissed report cannot carry a penalty | Pass |
+| 77 | upholding with a suspension locks the account and ends its sessions | Pass |
+| 78 | a report cannot be ruled on twice | Pass |
+| 79 | deleting erases the person and keeps the record | Pass |
+| 80 | the number a deleted account gave up can be registered again | Pass |
+| 81 | signing in writes to D1 (DFD 0.1.3) | Pass |
+| 82 | a user can see and end their sessions | Pass |
 
 ## System tests
 

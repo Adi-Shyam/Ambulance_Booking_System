@@ -292,6 +292,36 @@ CREATE TABLE IF NOT EXISTS push_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_push_user ON push_tokens(user_id);
 
+-- A crew's account of a passenger who abused the service: a call placed for
+-- an ambulance nobody needed, a fare refused, a driver threatened. The control
+-- room decides what follows; a driver reports, and does not sanction.
+--
+-- Kept apart from `audit_log`, which records what the system did. This records
+-- what somebody says happened, which is a claim until an administrator rules
+-- on it - and the ruling is recorded beside the claim rather than replacing it.
+CREATE TABLE IF NOT EXISTS reports (
+  report_id        TEXT PRIMARY KEY,                -- 'RPT' + 6 digits
+  booking_id       TEXT NOT NULL REFERENCES bookings(booking_id),
+  reported_user_id TEXT NOT NULL REFERENCES users(user_id),
+  reporter_user_id TEXT NOT NULL REFERENCES users(user_id),
+  provider_id      TEXT REFERENCES providers(provider_id),
+  reason_code      TEXT NOT NULL
+                   CHECK (reason_code IN ('FAKE_BOOKING','NO_SHOW','ABUSIVE','REFUSED_PAYMENT','OTHER')),
+  details          TEXT,
+  report_status    TEXT NOT NULL DEFAULT 'OPEN'
+                   CHECK (report_status IN ('OPEN','UPHELD','DISMISSED')),
+  action_taken     TEXT,                            -- what the control room did about it
+  review_remarks   TEXT,
+  reviewed_by      TEXT REFERENCES users(user_id),
+  reviewed_at      TEXT,
+  created_at       TEXT NOT NULL,
+  -- One account of one booking from one crew. A second thought goes in the
+  -- details of the first, not in another row inflating somebody's count.
+  UNIQUE (booking_id, reporter_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(report_status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reports_subject ON reports(reported_user_id);
+
 -- Constraint C.5: every booking, dispatch decision, status change and
 -- administrative action is logged for reproducibility and dispute resolution.
 CREATE TABLE IF NOT EXISTS audit_log (

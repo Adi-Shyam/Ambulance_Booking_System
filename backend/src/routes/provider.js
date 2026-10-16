@@ -453,14 +453,18 @@ router.get('/trips', requireProvider, asyncRoute(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const rows = db.prepare(
     `SELECT b.*, t.trip_id, t.trip_milestone, t.trip_start_time, t.trip_end_time, t.route_distance_km,
-            i.invoice_id, i.fare_amount, i.payment_status, r.rating_value, r.feedback_text
+            i.invoice_id, i.fare_amount, i.payment_status, r.rating_value, r.feedback_text,
+            -- So the console can offer to report a trip, or show that it
+            -- already has, without a second request per row.
+            rep.report_id, rep.report_status, rep.reason_code
      FROM bookings b
      LEFT JOIN trips t ON t.booking_id = b.booking_id
      LEFT JOIN invoices i ON i.booking_id = b.booking_id
      LEFT JOIN ratings r ON r.booking_id = b.booking_id
+     LEFT JOIN reports rep ON rep.booking_id = b.booking_id AND rep.reporter_user_id = ?
      WHERE b.assigned_provider_id = ?
      ORDER BY b.booking_timestamp DESC LIMIT ?`
-  ).all(req.provider.provider_id, limit);
+  ).all(req.user.user_id, req.provider.provider_id, limit);
   res.json({ trips: rows });
 }));
 
@@ -483,6 +487,86 @@ router.get('/earnings', requireProvider, asyncRoute(async (req, res) => {
   ).all(req.provider.provider_id);
 
   res.json({ summary, daily });
+}));
+
+/**
+ * A crew's account of a passenger who abused the service (F.13).
+ *
+ * Only the ambulance that served the booking may file one, and only once: a
+ * report is evidence, and evidence from somebody who was not there is worth
+ * nothing. The booking has to be over, because a crew still on the job has a
+ * trip to finish rather than a form to fill in.
+ *
+ * Filing changes nothing about the passenger's account. A driver reports; an
+ * administrator decides. Letting the person who was wronged also impose the
+ * penalty is how a dispute becomes a grudge.
+ */
+router.post('/bookings/:bookingId/report', requireProvider, asyncRoute(async (req, res) => {
+  const booking = db.prepare('SELECT * FROM bookings WHERE booking_id = ?').get(req.params.bookingId);
+  if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+  if (booking.assigned_provider_id !== req.provider.provider_id) {
+    return res.status(403).json({ error: 'You can only report a booking your ambulance attended' });
+  }
+  if (['REQUESTED', 'MATCHING', 'ASSIGNED', 'ENROUTE', 'ARRIVED', 'ONBOARD'].includes(booking.booking_status)) {
+    return res.status(409).json({ error: 'Finish the trip before reporting it' });
+  }
+
+  const reason_code = v.oneOf(
+    req.body.reason_code,
+    ['FAKE_BOOKING', 'NO_SHOW', 'ABUSIVE', 'REFUSED_PAYMENT', 'OTHER'],
+    'reason_code'
+  );
+  const details = v.text(req.body.details, 500, 'details');
+  if (reason_code === 'OTHER' && !details) {
+    return res.status(400).json({ error: 'Describe what happened', field: 'details' });
+  }
+
+  const existing = db.prepare(
+    'SELECT report_id FROM reports WHERE booking_id = ? AND reporter_user_id = ?'
+  ).get(booking.booking_id, req.user.user_id);
+  if (existing) {
+    return res.status(409).json({
+      error: 'You have already reported this booking. The control room is reviewing it.',
+      report_id: existing.report_id,
+    });
+  }
+
+  const report_id = nextId('report');
+  db.prepare(
+    `INSERT INTO reports (report_id, booking_id, reported_user_id, reporter_user_id,
+                          provider_id, reason_code, details, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    report_id, booking.booking_id, booking.user_id, req.user.user_id,
+    req.provider.provider_id, reason_code, details || null, nowIso()
+  );
+
+  audit('PASSENGER_REPORTED', {
+    actorUserId: req.user.user_id, actorRole: req.user.role_code,
+    entityType: 'report', entityId: report_id,
+    details: { booking_id: booking.booking_id, reported_user_id: booking.user_id, reason_code },
+  });
+
+  // The control room is the point of filing one, so it hears immediately.
+  sockets.toAdmins('admin:report:new', {
+    report_id, booking_id: booking.booking_id, reason_code, created_at: nowIso(),
+  });
+
+  res.status(201).json({
+    message: 'Reported. The control room will review this.',
+    report_id,
+  });
+}));
+
+/** What this ambulance has already reported, so the app can hide the button. */
+router.get('/reports', requireProvider, asyncRoute(async (req, res) => {
+  const rows = db.prepare(
+    `SELECT r.*, b.address_text, b.booking_timestamp
+     FROM reports r JOIN bookings b ON b.booking_id = r.booking_id
+     WHERE r.reporter_user_id = ? ORDER BY r.created_at DESC LIMIT 50`
+  ).all(req.user.user_id);
+  res.json({ reports: rows });
 }));
 
 module.exports = router;
