@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
 import { FONT, colors, dateTimeOf, radius, relative, spacing, typo } from '../../lib/theme';
-import { Banner, Body, Card, EmptyState, Loading, Small } from '../../components/ui';
+import { Banner, Card, EmptyState, Loading, Small } from '../../components/ui';
 
 /**
  * Constraint C.5 - the audit trail.

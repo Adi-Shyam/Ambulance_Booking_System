@@ -8,7 +8,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { startTestServer, stopTestServer, call, get, post, signIn, ACCOUNTS } = require('../helpers');
+const { startTestServer, stopTestServer, get, post, ACCOUNTS } = require('../helpers');
 // Required lazily: src/db resolves DB_FILE at load time, so touching it
 // before startTestServer sets that variable would bind every query - and
 // the server's own, through the module cache - to the real database.

@@ -180,7 +180,6 @@ export const BOOKING_STATUSES = [
 ];
 
 export const VERIFICATION_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'SUSPENDED'];
-export const AVAILABILITY_STATUSES = ['AVAILABLE', 'BUSY', 'OFFLINE'];
 export const ROLE_CODES = ['USER', 'DRIVER', 'ORG', 'ADMIN'];
 
 export const REPORT_TYPES = [

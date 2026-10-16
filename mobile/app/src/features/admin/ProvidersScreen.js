@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
 import { confirmAction } from '../../lib/confirm';
 import { VERIFICATION_STATUSES } from '../../lib/config';
-import { FONT, colors, radius, relative, spacing, typo } from '../../lib/theme';
+import { FONT, colors, radius, relative, spacing } from '../../lib/theme';
 import { Banner, Body, Button, Card, EmptyState, Field, Loading, Pill, Row, Small } from '../../components/ui';
 
 /**

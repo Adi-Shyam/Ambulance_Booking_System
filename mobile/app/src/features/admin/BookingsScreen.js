@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
 import { BOOKING_STATUSES } from '../../lib/config';
-import { FONT, colors, dateTimeOf, money, radius, relative, spacing, typo } from '../../lib/theme';
+import { FONT, colors, dateTimeOf, radius, relative, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Card, EmptyState, Field, Loading, Pill, Small } from '../../components/ui';
 
 /**

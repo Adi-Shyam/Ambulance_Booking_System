@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
-import { FONT, colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
+import { FONT, colors, dateTimeOf, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, EmptyState, Loading, Pill, Small } from '../../components/ui';
 
 // F.11 Booking history and records.

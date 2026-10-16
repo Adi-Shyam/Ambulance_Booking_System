@@ -37,6 +37,3 @@ export async function callCounterparty(bookingId) {
   await Linking.openURL(url);
   return who;
 }
-
-/** What to put on the button, given who the caller is. */
-export const callLabel = (role) => (role === 'DRIVER' ? 'Call patient' : 'Call driver');

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { getSocket, useResync, useSocketEvent } from '../../lib/socket';
 import { MILESTONE_STEPS } from '../../lib/config';
 import { confirmAction } from '../../lib/confirm';
-import { FONT, STATUS_TEXT, colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
+import { FONT, STATUS_TEXT, colors, dateTimeOf, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Button, Card, EmptyState, H2, Loading, Pill, Row, Small, StepTrail } from '../../components/ui';
 import { callCounterparty } from '../../lib/calling';
 import MapPanel from '../../components/MapPanel';

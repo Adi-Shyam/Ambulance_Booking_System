@@ -1,6 +1,6 @@
 'use strict';
 // Unit tests - validators (Data Dictionary section 2)
-const { test, describe, before } = require('node:test');
+const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const { useTempDatabase } = require('./bootstrap');
 

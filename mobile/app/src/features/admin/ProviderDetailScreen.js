@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
 import { colors, dateTimeOf, money, relative, spacing, typo } from '../../lib/theme';
-import { Banner, Body, Button, Card, H2, Loading, Pill, Row, Small } from '../../components/ui';
+import { Banner, Button, Card, H2, Loading, Pill, Row, Small } from '../../components/ui';
 import MapPanel from '../../components/MapPanel';
 
 /** One provider's record: the vehicle, how it has performed, and where it is. */
