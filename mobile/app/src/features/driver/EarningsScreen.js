@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { useResync, useSocketEvent } from '../../lib/socket';
 import { FONT, colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Card, EmptyState, H2, Loading, Pill, Row, Small } from '../../components/ui';
-import ReportPassenger from '../../components/ReportPassenger';
+import ReportParty from '../../components/ReportParty';
 
 /** F.11 records and the earnings side of F.10. */
 export default function EarningsScreen() {
@@ -118,7 +118,7 @@ export default function EarningsScreen() {
                 the emergency first and the paperwork afterwards, and by this
                 point the trip is over and the detail is still fresh.
               */}
-              <ReportPassenger
+              <ReportParty
                 bookingId={t.booking_id}
                 existing={t}
                 onFiled={load}

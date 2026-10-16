@@ -148,7 +148,13 @@ router.get('/:bookingId', authenticate, asyncRoute(async (req, res) => {
      WHERE a.booking_id = ? ORDER BY a.created_at`
   ).all(booking.booking_id);
 
-  res.json({ booking: dispatch.publicBooking(booking), invoice, rating, assignments });
+  // Whatever this passenger already reported about the trip, so the screen can
+  // show the outcome instead of offering to report it again.
+  const report = db.prepare(
+    'SELECT report_id, reason_code, report_status, created_at FROM reports WHERE booking_id = ? AND reporter_user_id = ?'
+  ).get(booking.booking_id, req.user.user_id) || null;
+
+  res.json({ booking: dispatch.publicBooking(booking), invoice, rating, assignments, report });
 }));
 
 // --------------------------------------------- in-app calling (F.6, C.5)
@@ -376,6 +382,83 @@ router.post('/estimate', authenticate, asyncRoute(async (req, res) => {
     return res.status(400).json({ error: 'distance_km must be a non-negative number' });
   }
   res.json({ estimate: fare.estimate(ambulance_type, distance_km) });
+}));
+
+// ------------------------------------------------- F.13 reporting the crew
+/**
+ * A passenger's account of the ambulance that answered their call.
+ *
+ * The mirror of the crew's report, and deliberately the same shape: same
+ * table, same review queue, same rule that filing decides nothing. An
+ * complaints process that is easier to use in one direction than the other is
+ * not a complaints process.
+ *
+ * Only the person who placed the booking may file, only once, and only once
+ * the trip is over - somebody still waiting for an ambulance needs it to
+ * arrive, not a form.
+ */
+router.post('/:bookingId/report', authenticate, asyncRoute(async (req, res) => {
+  const booking = ownedBooking(req.params.bookingId, req);
+
+  if (booking.user_id !== req.user.user_id) {
+    return res.status(403).json({ error: 'Only the person who placed this booking can report it' });
+  }
+  if (!booking.assigned_provider_id) {
+    return res.status(409).json({ error: 'No ambulance was assigned to this booking' });
+  }
+  if (['REQUESTED', 'MATCHING', 'ASSIGNED', 'ENROUTE', 'ARRIVED', 'ONBOARD'].includes(booking.booking_status)) {
+    return res.status(409).json({ error: 'You can report this once the trip is over' });
+  }
+
+  const reason_code = v.oneOf(
+    req.body.reason_code,
+    ['UNSAFE_DRIVING', 'OVERCHARGED', 'DID_NOT_ARRIVE', 'VEHICLE_CONDITION', 'ABUSIVE', 'OTHER'],
+    'reason_code'
+  );
+  const details = v.text(req.body.details, 500, 'details');
+  if (reason_code === 'OTHER' && !details) {
+    return res.status(400).json({ error: 'Describe what happened', field: 'details' });
+  }
+
+  const existing = db.prepare(
+    'SELECT report_id FROM reports WHERE booking_id = ? AND reporter_user_id = ?'
+  ).get(booking.booking_id, req.user.user_id);
+  if (existing) {
+    return res.status(409).json({
+      error: 'You have already reported this trip. The control room is reviewing it.',
+      report_id: existing.report_id,
+    });
+  }
+
+  const provider = dispatch.providerWithUser(booking.assigned_provider_id);
+  if (!provider) return res.status(404).json({ error: 'That ambulance is no longer on file' });
+
+  const report_id = nextId('report');
+  db.prepare(
+    `INSERT INTO reports (report_id, booking_id, reported_user_id, reported_role, reporter_user_id,
+                          provider_id, reason_code, details, created_at)
+     VALUES (?, ?, ?, 'PROVIDER', ?, ?, ?, ?, ?)`
+  ).run(
+    report_id, booking.booking_id, provider.driver_user_id, req.user.user_id,
+    booking.assigned_provider_id, reason_code, details || null, nowIso()
+  );
+
+  audit('CREW_REPORTED', {
+    actorUserId: req.user.user_id, actorRole: req.user.role_code,
+    entityType: 'report', entityId: report_id,
+    details: {
+      booking_id: booking.booking_id,
+      provider_id: booking.assigned_provider_id,
+      reason_code,
+    },
+  });
+
+  sockets.toAdmins('admin:report:new', {
+    report_id, booking_id: booking.booking_id, reason_code,
+    reported_role: 'PROVIDER', created_at: nowIso(),
+  });
+
+  res.status(201).json({ message: 'Reported. The control room will review this.', report_id });
 }));
 
 module.exports = router;

@@ -581,7 +581,9 @@ router.get('/reports', asyncRoute(async (req, res) => {
             subject.phone_no   AS reported_phone,
             subject.email_id   AS reported_email,
             subject.verification_status AS reported_status,
+            subject.role_code  AS reported_role_code,
             crew.full_name     AS reporter_name,
+            crew.role_code     AS reporter_role_code,
             p.vehicle_reg_no
      FROM reports r
      JOIN bookings b    ON b.booking_id = r.booking_id
@@ -652,6 +654,27 @@ router.post('/reports/:reportId/review', asyncRoute(async (req, res) => {
     // signed in until their token expires is not a suspension.
     db.prepare('UPDATE sessions SET revoked = 1, revoked_at = ? WHERE user_id = ? AND revoked = 0')
       .run(now, subject.user_id);
+
+    // A suspended driver has to come off the road as well as out of the app.
+    // Locking the account alone would leave a vehicle the matcher still
+    // believes is free, and the next emergency offered to somebody who can no
+    // longer answer it (C.6).
+    if (report.reported_role === 'PROVIDER') {
+      db.prepare(
+        `UPDATE providers
+         SET verification_status = 'SUSPENDED', availability_status = 'OFFLINE', updated_at = ?
+         WHERE user_id = ?`
+      ).run(now, subject.user_id);
+
+      const prov = db.prepare('SELECT provider_id FROM providers WHERE user_id = ?').get(subject.user_id);
+      if (prov) {
+        sockets.toProvider(prov.provider_id, 'provider:verification', {
+          verification_status: 'SUSPENDED',
+          remarks: review_remarks || 'Your account has been suspended by the control room.',
+        });
+        sockets.toAdmins('admin:provider:update', { provider_id: prov.provider_id });
+      }
+    }
   }
 
   if (action === 'DELETE') {

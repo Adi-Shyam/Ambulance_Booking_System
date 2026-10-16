@@ -5,23 +5,55 @@ import { FONT, colors, radius, spacing } from '../lib/theme';
 import { Banner, Body, Button, Field, H2, Small } from './ui';
 
 /**
- * Lets a crew report a passenger who abused the service (F.13).
+ * Reports the other party to a booking (F.13), in whichever direction the
+ * person using it sits.
  *
- * Deliberately not a one-tap action. Picking a reason and being able to add
+ * One component rather than two, because the process has to be the same both
+ * ways: a complaints route that is easier to use for a crew than a passenger
+ * is not a complaints route. Only the wording and the reasons differ.
+ *
+ * Deliberately not a one-tap action. Picking a reason and being able to say
  * what happened is a small amount of friction that makes a report worth
- * reading, and the screen says plainly that filing one decides nothing - the
- * control room does. A driver who believes the button suspends somebody will
- * either use it as a threat or not use it at all.
+ * reading - and the screen says plainly that filing decides nothing. Somebody
+ * who believes the button suspends people will either use it as a threat or
+ * never touch it.
  */
-const REASONS = [
-  { code: 'FAKE_BOOKING', label: 'Hoax call', hint: 'No emergency, or nobody there at all' },
-  { code: 'NO_SHOW', label: 'Did not turn up', hint: 'We waited and could not reach them' },
-  { code: 'ABUSIVE', label: 'Abusive or threatening', hint: 'Towards the crew or the vehicle' },
-  { code: 'REFUSED_PAYMENT', label: 'Refused to pay', hint: 'The fare was declined on completion' },
-  { code: 'OTHER', label: 'Something else', hint: 'Describe it below' },
-];
+const REASONS = {
+  // A crew, about a passenger.
+  PASSENGER: [
+    { code: 'FAKE_BOOKING', label: 'Hoax call', hint: 'No emergency, or nobody there at all' },
+    { code: 'NO_SHOW', label: 'Did not turn up', hint: 'We waited and could not reach them' },
+    { code: 'ABUSIVE', label: 'Abusive or threatening', hint: 'Towards the crew or the vehicle' },
+    { code: 'REFUSED_PAYMENT', label: 'Refused to pay', hint: 'The fare was declined on completion' },
+    { code: 'OTHER', label: 'Something else', hint: 'Describe it below' },
+  ],
+  // A passenger, about a crew.
+  CREW: [
+    { code: 'DID_NOT_ARRIVE', label: 'Never arrived', hint: 'Accepted the request and did not come' },
+    { code: 'UNSAFE_DRIVING', label: 'Unsafe driving', hint: 'Dangerous on the way or with the patient aboard' },
+    { code: 'ABUSIVE', label: 'Rude or abusive', hint: 'Towards the patient or whoever was with them' },
+    { code: 'OVERCHARGED', label: 'Asked for more than the fare', hint: 'Demanded money beyond the invoice' },
+    { code: 'VEHICLE_CONDITION', label: 'Vehicle or equipment', hint: 'Unclean, or missing what it should carry' },
+    { code: 'OTHER', label: 'Something else', hint: 'Describe it below' },
+  ],
+};
 
-export default function ReportPassenger({ bookingId, existing, onFiled }) {
+const COPY = {
+  PASSENGER: {
+    open: 'Report this passenger',
+    title: 'Report this passenger',
+    endpoint: (id) => `/api/provider/bookings/${id}/report`,
+  },
+  CREW: {
+    open: 'Report this ambulance',
+    title: 'Report this ambulance',
+    endpoint: (id) => `/api/bookings/${id}/report`,
+  },
+};
+
+export default function ReportParty({ bookingId, existing, onFiled, about = 'PASSENGER' }) {
+  const copy = COPY[about];
+  const reasons = REASONS[about];
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState(null);
   const [details, setDetails] = useState('');
@@ -48,7 +80,7 @@ export default function ReportPassenger({ bookingId, existing, onFiled }) {
   if (!open) {
     return (
       <Button
-        title="Report this passenger"
+        title={copy.open}
         icon="⚠️"
         variant="ghost"
         style={{ marginTop: spacing.sm }}
@@ -62,7 +94,7 @@ export default function ReportPassenger({ bookingId, existing, onFiled }) {
     setBusy(true);
     setError('');
     try {
-      await api.post(`/api/provider/bookings/${bookingId}/report`, {
+      await api.post(copy.endpoint(bookingId), {
         reason_code: reason,
         details: details.trim() || undefined,
       });
@@ -77,7 +109,7 @@ export default function ReportPassenger({ bookingId, existing, onFiled }) {
 
   return (
     <View style={styles.form}>
-      <H2>Report this passenger</H2>
+      <H2>{copy.title}</H2>
       <Small style={{ marginTop: 4, marginBottom: spacing.md }}>
         This goes to the control room, who decide what happens. Filing it does
         not suspend anybody by itself.
@@ -85,7 +117,7 @@ export default function ReportPassenger({ bookingId, existing, onFiled }) {
 
       <Banner kind="error">{error}</Banner>
 
-      {REASONS.map((r) => (
+      {reasons.map((r) => (
         <Pressable
           key={r.code}
           onPress={() => setReason(r.code)}

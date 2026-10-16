@@ -54,6 +54,21 @@ const COLUMN_ADDITIONS = [
 // `otps.channel` is not here: adding a column *with* a CHECK is allowed, so
 // COLUMN_ADDITIONS handles that one.
 function widenCheckConstraints() {
+  // The reports table began as one direction only - a crew reporting a
+  // passenger - and gained the other, which meant new reason codes and a
+  // column saying which way round a given row runs.
+  rebuildTable({
+    table: 'reports',
+    needsRebuild: (ddl) => !ddl.includes('reported_role'),
+    createSql: ddlFromSchema('reports', 'reports_migrated'),
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(report_status, created_at DESC)",
+      'CREATE INDEX IF NOT EXISTS idx_reports_subject ON reports(reported_user_id)',
+    ],
+    // Every row that predates the column was a crew reporting a passenger.
+    carry: { reported_role: "'USER'" },
+  });
+
   // `otps.phone_no` became `identifier`: a code proves control of one contact
   // detail, and since registration now verifies an email address, the row can
   // no longer be keyed on a phone number it may not have. Rows already in the

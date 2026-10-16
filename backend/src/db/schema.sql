@@ -292,9 +292,10 @@ CREATE TABLE IF NOT EXISTS push_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_push_user ON push_tokens(user_id);
 
--- A crew's account of a passenger who abused the service: a call placed for
--- an ambulance nobody needed, a fare refused, a driver threatened. The control
--- room decides what follows; a driver reports, and does not sanction.
+-- A complaint about the other party to a booking, in either direction: a crew
+-- reporting a passenger who abused the service, or a passenger reporting a
+-- crew who did. The control room decides what follows; neither side sanctions
+-- the other.
 --
 -- Kept apart from `audit_log`, which records what the system did. This records
 -- what somebody says happened, which is a claim until an administrator rules
@@ -305,8 +306,21 @@ CREATE TABLE IF NOT EXISTS reports (
   reported_user_id TEXT NOT NULL REFERENCES users(user_id),
   reporter_user_id TEXT NOT NULL REFERENCES users(user_id),
   provider_id      TEXT REFERENCES providers(provider_id),
+  -- Who is being complained about. The table runs in both directions: a crew
+  -- reports a passenger who abused the service, a passenger reports a crew who
+  -- did. Keeping them in one table keeps one review process, which is the part
+  -- that has to be even-handed.
+  reported_role    TEXT NOT NULL DEFAULT 'USER'
+                   CHECK (reported_role IN ('USER','PROVIDER')),
   reason_code      TEXT NOT NULL
-                   CHECK (reason_code IN ('FAKE_BOOKING','NO_SHOW','ABUSIVE','REFUSED_PAYMENT','OTHER')),
+                   CHECK (reason_code IN (
+                     -- against a passenger
+                     'FAKE_BOOKING','NO_SHOW','REFUSED_PAYMENT',
+                     -- against a crew
+                     'UNSAFE_DRIVING','OVERCHARGED','DID_NOT_ARRIVE','VEHICLE_CONDITION',
+                     -- either
+                     'ABUSIVE','OTHER'
+                   )),
   details          TEXT,
   report_status    TEXT NOT NULL DEFAULT 'OPEN'
                    CHECK (report_status IN ('OPEN','UPHELD','DISMISSED')),

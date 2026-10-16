@@ -95,17 +95,20 @@ All of these need the `DRIVER` or `ORG` role; the ones marked † additionally n
 | GET | `/api/provider/trips` † | Trip history with fare, payment and rating. |
 | GET | `/api/provider/earnings` † | Settlement summary and a 14-day series. |
 
-### Passenger reports — F.13
+### Reports — F.13
 
-A crew reports; the control room decides. Filing a report changes nothing
-about the account it names.
+A complaint about the other party to a booking, in either direction. The
+control room decides; filing changes nothing about the account named, and the
+process is identical both ways — a complaints route that is easier to use in
+one direction than the other is not a complaints route.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/provider/bookings/:id/report` | `reason_code` (`FAKE_BOOKING`\|`NO_SHOW`\|`ABUSIVE`\|`REFUSED_PAYMENT`\|`OTHER`), optional `details` — required for `OTHER`. Only the ambulance that attended may file one, only once per booking, and only once the trip is over. |
+| POST | `/api/provider/bookings/:id/report` | **A crew, about a passenger.** `reason_code` (`FAKE_BOOKING`\|`NO_SHOW`\|`REFUSED_PAYMENT`\|`ABUSIVE`\|`OTHER`), optional `details` — required for `OTHER`. Only the ambulance that attended, only once per booking, only once the trip is over. |
+| POST | `/api/bookings/:id/report` | **A passenger, about a crew.** `reason_code` (`DID_NOT_ARRIVE`\|`UNSAFE_DRIVING`\|`OVERCHARGED`\|`VEHICLE_CONDITION`\|`ABUSIVE`\|`OTHER`). Same rules, from the other end. A reason meant for the other direction is refused. |
 | GET | `/api/provider/reports` | What this ambulance has reported. |
-| GET | `/api/admin/reports` | Every report, filterable by `report_status`. Each carries `reports_against_subject` and `upheld_against_subject`, because one complaint is an incident and four are a pattern. |
-| POST | `/api/admin/reports/:id/review` | `report_status` (`UPHELD`\|`DISMISSED`), `action` (`NONE`\|`WARN`\|`SUSPEND`\|`DELETE`), optional `review_remarks`. A dismissed report cannot carry a penalty. `SUSPEND` locks the account and revokes every live session. `DELETE` does that **and anonymises** the name, number and email — the row stays because bookings, invoices and the audit trail point at it, and C.5 needs those to outlive the person. The identifiers are freed, so the number can be registered again. |
+| GET | `/api/admin/reports` | Every report in both directions, filterable by `report_status`. Each carries `reported_role` (`USER`\|`PROVIDER`), plus `reports_against_subject` and `upheld_against_subject`, because one complaint is an incident and four are a pattern. |
+| POST | `/api/admin/reports/:id/review` | `report_status` (`UPHELD`\|`DISMISSED`), `action` (`NONE`\|`WARN`\|`SUSPEND`\|`DELETE`), optional `review_remarks`. A dismissed report cannot carry a penalty. `SUSPEND` locks the account and revokes every live session; for a crew it also suspends the vehicle and takes it off duty, or the matcher would keep offering emergencies to somebody who can no longer answer them (C.6). `DELETE` does that **and anonymises** the name, number and email — the row stays because bookings, invoices and the audit trail point at it, and C.5 needs those to outlive the person. The identifiers are freed, so the number can be registered again. |
 
 ---
 

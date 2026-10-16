@@ -21,12 +21,25 @@ import { Banner, Body, Button, Card, EmptyState, Field, H2, Loading, Pill, Row, 
  * pattern, and that difference is the whole judgement being asked for.
  */
 const REASON_LABEL = {
+  // about a passenger
   FAKE_BOOKING: 'Hoax call',
   NO_SHOW: 'Did not turn up',
-  ABUSIVE: 'Abusive or threatening',
   REFUSED_PAYMENT: 'Refused to pay',
+  // about a crew
+  DID_NOT_ARRIVE: 'Never arrived',
+  UNSAFE_DRIVING: 'Unsafe driving',
+  OVERCHARGED: 'Asked for more than the fare',
+  VEHICLE_CONDITION: 'Vehicle or equipment',
+  // either
+  ABUSIVE: 'Abusive or threatening',
   OTHER: 'Other',
 };
+
+const DIRECTIONS = [
+  { key: '', label: 'Everything' },
+  { key: 'USER', label: 'About passengers' },
+  { key: 'PROVIDER', label: 'About crews' },
+];
 
 const FILTERS = [
   { key: 'OPEN', label: 'Open' },
@@ -38,6 +51,10 @@ const FILTERS = [
 export default function PassengerReportsScreen() {
   const [reports, setReports] = useState([]);
   const [filter, setFilter] = useState('OPEN');
+  // Which way round. Complaints about crews and complaints about passengers
+  // sit in one queue so the process is the same, but reading them is easier
+  // one direction at a time.
+  const [direction, setDirection] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -50,13 +67,13 @@ export default function PassengerReportsScreen() {
     try {
       const q = filter ? `?report_status=${filter}` : '';
       const r = await api.get(`/api/admin/reports${q}`);
-      setReports(r.reports);
+      setReports(direction ? r.reports.filter((x) => x.reported_role === direction) : r.reports);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, direction]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useResync(load, [load]);
@@ -116,6 +133,26 @@ export default function PassengerReportsScreen() {
         ))}
       </View>
 
+      <View style={styles.filters}>
+        {DIRECTIONS.map((d) => (
+          <Pressable
+            key={d.key || 'any'}
+            onPress={() => setDirection(d.key)}
+            style={[styles.chip, direction === d.key && styles.chipOn]}
+          >
+            <Text
+              style={{
+                fontSize: 13,
+                fontFamily: FONT.semibold,
+                color: direction === d.key ? colors.white : colors.muted,
+              }}
+            >
+              {d.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
       {reports.length === 0 ? (
         <EmptyState
           icon="🛡️"
@@ -138,7 +175,10 @@ export default function PassengerReportsScreen() {
               </View>
 
               <H2 style={{ marginTop: spacing.sm }}>{r.reported_name}</H2>
-              <Small>{r.reported_phone}{r.reported_email ? ` · ${r.reported_email}` : ''}</Small>
+              <Small>
+                {r.reported_role === 'PROVIDER' ? 'Ambulance crew' : 'Passenger'}
+                {' · '}{r.reported_phone}{r.reported_email ? ` · ${r.reported_email}` : ''}
+              </Small>
 
               {/*
                 The count sits above the detail on purpose. Whether this is a
@@ -164,8 +204,9 @@ export default function PassengerReportsScreen() {
                 <Row label="Pickup" value={r.address_text || '—'} />
                 <Row
                   label="Reported by"
-                  value={`${r.reporter_name}${r.vehicle_reg_no ? ` · ${r.vehicle_reg_no}` : ''}`}
+                  value={`${r.reporter_name} (${r.reported_role === 'PROVIDER' ? 'passenger' : 'crew'})`}
                 />
+                {r.vehicle_reg_no ? <Row label="Ambulance" value={r.vehicle_reg_no} /> : null}
                 <Row label="Filed" value={dateTimeOf(r.created_at)} />
                 <Row label="Account" value={r.reported_status} />
               </View>
@@ -219,7 +260,9 @@ export default function PassengerReportsScreen() {
                       confirmAction(
                         {
                           title: 'Suspend this account?',
-                          message: `${r.reported_name} will be signed out everywhere and cannot book or sign in. This can be undone from Accounts.`,
+                          message: r.reported_role === 'PROVIDER'
+                            ? `${r.reported_name} will be signed out, taken off duty, and their ambulance will stop receiving requests. This can be undone from Accounts.`
+                            : `${r.reported_name} will be signed out everywhere and cannot book or sign in. This can be undone from Accounts.`,
                           confirmLabel: 'Suspend',
                           destructive: true,
                         },

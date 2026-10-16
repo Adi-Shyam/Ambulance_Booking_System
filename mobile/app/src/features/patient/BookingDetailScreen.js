@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { PAYMENT_MODES } from '../../lib/config';
 import { FONT, colors, dateTimeOf, money, radius, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Button, Card, Field, H2, Loading, Pill, Row, Small } from '../../components/ui';
+import ReportParty from '../../components/ReportParty';
 import MapPanel from '../../components/MapPanel';
 
 // F.10 payment, F.11 record detail, F.12 rating and feedback.
@@ -221,6 +222,28 @@ export default function BookingDetailScreen({ route }) {
               <Pill label={a.assignment_status} />
             </View>
           ))}
+        </Card>
+      ) : null}
+
+      {/*
+        Below the rating, and only once the trip is over. A star is about how
+        it went; this is for when something was wrong enough to need somebody
+        to look at it. Shown whenever an ambulance was assigned, because the
+        complaint most worth making is that it never arrived.
+      */}
+      {b.assigned_provider_id && !['REQUESTED', 'MATCHING', 'ASSIGNED', 'ENROUTE', 'ARRIVED', 'ONBOARD'].includes(b.booking_status) ? (
+        <Card>
+          <H2>Something wrong with this trip?</H2>
+          <Small style={{ marginTop: 4 }}>
+            The control room reviews every report. Nothing happens to the crew
+            on your say-so alone.
+          </Small>
+          <ReportParty
+            about="CREW"
+            bookingId={b.booking_id}
+            existing={data.report}
+            onFiled={load}
+          />
         </Card>
       ) : null}
     </ScrollView>
