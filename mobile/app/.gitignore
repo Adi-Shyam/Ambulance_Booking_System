@@ -1,6 +1,7 @@
 node_modules/
 .expo/
 dist/
+web-build/
 .env
 *.log
 
@@ -8,3 +9,12 @@ dist/
 # native projects are build output rather than source.
 android/
 ios/
+
+# Build artefacts and signing keys. EAS reads this file when deciding what
+# to upload, so these patterns keep a keystore out of the cloud archive as
+# well as out of a commit.
+*.apk
+*.aab
+*.keystore
+*.jks
+.DS_Store

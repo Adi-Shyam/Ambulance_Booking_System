@@ -465,48 +465,6 @@ EAS builds in the cloud and returns a download link. Install it on the phone the
 way you would any APK — allow installation from unknown sources, tap the file.
 No Google Play account is involved.
 
-### Building on this machine instead of EAS
-
-EAS builds in the cloud and queues behind other people's jobs, which on the
-free plan has meant anything from ten minutes to an hour. A local build takes
-three to five once the toolchain is warm.
-
-```powershell
-cd mobile/app
-.uild-apk.ps1                                    # against the deployed API
-.uild-apk.ps1 -ApiUrl http://192.168.1.17:4000   # against a laptop on the LAN
-.uild-apk.ps1 -Clean                             # after changing app.json
-```
-
-It regenerates `android/` with `expo prebuild` each time rather than trusting
-what is there. That directory is build output - gitignored, and rebuilt from
-`app.json` - so regenerating means a change to a permission or a plugin cannot
-be silently missed.
-
-What it needs, once:
-
-| | |
-|---|---|
-| JDK 17 | `java -version` |
-| Android SDK | platforms 35 & 36, build-tools 35.0.0 & 36.0.0, platform-tools |
-| Licences | `sdkmanager --licenses` |
-
-Install the SDK with the command-line tools from
-[developer.android.com](https://developer.android.com/studio#command-tools),
-unzipped so that `sdkmanager.bat` sits at
-`%USERPROFILE%\Android\Sdk\cmdline-tools\latestin`. Gradle downloads
-itself on the first build, which is why that one takes far longer than the
-rest.
-
-**Which to use.** A local build is signed with the debug keystore - the React
-Native default, and a key whose password is published. It installs and runs,
-which is all an iteration needs. The APK you actually hand to somebody should
-come from EAS, which holds the project's own release keystore, so each build
-installs over the last.
-
-Mixing the two means uninstalling first: Android refuses to replace an app
-with one signed by a different key, and that refusal is the point of signing.
-
 ### Pointing the app at your backend
 
 A packaged APK has no dev server to ask for the LAN address, so it starts from
