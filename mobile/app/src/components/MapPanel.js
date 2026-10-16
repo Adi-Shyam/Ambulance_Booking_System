@@ -2,6 +2,7 @@ import { createElement, useEffect, useMemo, useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { colors, radius } from '../lib/theme';
+import { MAPTILER_KEY } from '../lib/config';
 
 /**
  * Map rendered as Leaflet inside a WebView.
@@ -14,9 +15,16 @@ import { colors, radius } from '../lib/theme';
  * react-native-web (`expo start --web`, handy for screenshots and demos) the
  * same Leaflet document is mounted in an iframe instead.
  *
- * markers: [{ latitude, longitude, color, label }]
+ * Tiles come from MapTiler when a key is configured and from OpenStreetMap
+ * otherwise. Both render the same Leaflet document, so the only difference is
+ * how the map looks.
+ *
+ * markers: [{ latitude, longitude, glyph, label, kind, labelAlways }]
+ *   glyph       the emoji to show - 📍 by default
+ *   kind        'pickup' makes it the large, draggable one
+ *   labelAlways keeps the tooltip open instead of waiting for a tap
  * route:   [[lat, lng], ...]
- * onPick:  (lat, lng) => void   enables tap-to-drop-a-pin (F.4 map adjustment)
+ * onPick:  (lat, lng) => void   enables tap-to-place and pin dragging (F.4)
  */
 export default function MapPanel(props) {
   return Platform.OS === 'web' ? <WebMap {...props} /> : <NativeMap {...props} />;
@@ -111,6 +119,21 @@ function WebMap({ markers = [], route = [], height = 260, onPick, zoom = 14 }) {
 }
 
 function buildHtml(zoom, pickable) {
+  // MapTiler's key is meant to travel in the tile URL - it is a client-side
+  // key by design, and restricting it to an origin is done in their dashboard
+  // rather than by hiding it. With none configured this falls back to plain
+  // OpenStreetMap tiles, which work but look like a wiki and whose usage policy
+  // asks apps not to lean on them.
+  const tiles = MAPTILER_KEY
+    ? {
+        url: `https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`,
+        attribution: '&copy; MapTiler &copy; OpenStreetMap',
+      }
+    : {
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '&copy; OpenStreetMap',
+      };
+
   return `<!doctype html>
 <html>
 <head>
@@ -122,18 +145,34 @@ function buildHtml(zoom, pickable) {
   html, body, #map { height: 100%; margin: 0; background: #0b1119; }
   .leaflet-control-attribution { font-size: 9px; background: rgba(0,0,0,.5); color: #93a4bb; }
   .leaflet-control-attribution a { color: #8db4ff; }
+
+  /* A pin, not a dot. A circle marks an area; a pin marks a point, and the
+     point is the whole question being asked here - where exactly are you. */
+  .pin { font-size: 26px; line-height: 26px; text-align: center; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+  .pin-pickup { font-size: 32px; line-height: 32px; }
+  .pin.dragging { opacity: .6; }
+
+  /* Says the pin can be moved, without a tooltip nobody reads. */
+  .hint {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: 8px; z-index: 500;
+    background: rgba(11,17,25,.82); color: #e8eef7;
+    font: 11px/1.4 -apple-system, Roboto, sans-serif;
+    padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+    pointer-events: none;
+  }
 </style>
 </head>
 <body>
 <div id="map"></div>
+${pickable ? '<div class="hint" id="hint">Tap the map or drag the pin</div>' : ''}
 <script>
   var map = L.map('map', { zoomControl: false, attributionControl: true }).setView([13.0104, 74.7942], ${zoom});
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap'
-  }).addTo(map);
+  L.tileLayer('${tiles.url}', { maxZoom: 20, attribution: '${tiles.attribution}' }).addTo(map);
 
   var layer = L.layerGroup().addTo(map);
   var lastSignature = '';
+  var pickMarker = null;
 
   function post(obj) {
     var payload = JSON.stringify(obj);
@@ -142,28 +181,66 @@ function buildHtml(zoom, pickable) {
     else if (window.parent !== window) window.parent.postMessage(payload, '*');
   }
 
+  /** An emoji in a div, which Leaflet positions by its tip rather than centre. */
+  function pinIcon(glyph, big) {
+    var size = big ? 32 : 26;
+    return L.divIcon({
+      html: '<div class="pin' + (big ? ' pin-pickup' : '') + '">' + glyph + '</div>',
+      className: '',
+      iconSize: [size, size],
+      // Anchored at the bottom centre: a pin points at a spot, and that spot
+      // is under its tip, not under its middle.
+      iconAnchor: [size / 2, size]
+    });
+  }
+
   window.applyState = function (state) {
     var signature = JSON.stringify(state);
     if (signature === lastSignature) return;
     lastSignature = signature;
 
     layer.clearLayers();
+    pickMarker = null;
     var pts = [];
 
     (state.markers || []).forEach(function (m) {
-      var marker = L.circleMarker([m.latitude, m.longitude], {
-        radius: m.radius || 10,
-        color: m.color || '#4c8dff',
-        fillColor: m.color || '#4c8dff',
-        fillOpacity: 0.9,
-        weight: 3
+      var glyph = m.glyph || '📍';
+      var isPickup = m.kind === 'pickup';
+      var marker = L.marker([m.latitude, m.longitude], {
+        icon: pinIcon(glyph, isPickup),
+        // Only the pickup pin moves: dragging an ambulance would be fiction.
+        draggable: Boolean(isPickup && ${pickable}),
+        zIndexOffset: isPickup ? 1000 : 0
       }).addTo(layer);
-      if (m.label) marker.bindTooltip(m.label, { permanent: false, direction: 'top' });
+
+      if (m.label) {
+        marker.bindTooltip(m.label, {
+          permanent: Boolean(m.labelAlways),
+          direction: 'top',
+          offset: [0, -(isPickup ? 30 : 24)]
+        });
+      }
+
+      if (isPickup && ${pickable}) {
+        pickMarker = marker;
+        marker.on('dragstart', function () {
+          marker.getElement()?.querySelector('.pin')?.classList.add('dragging');
+        });
+        marker.on('dragend', function (e) {
+          marker.getElement()?.querySelector('.pin')?.classList.remove('dragging');
+          var p = e.target.getLatLng();
+          post({ type: 'pick', lat: p.lat, lng: p.lng });
+        });
+      }
+
       pts.push([m.latitude, m.longitude]);
     });
 
     if (state.route && state.route.length > 1) {
-      L.polyline(state.route, { color: '#e63946', weight: 5, opacity: 0.85 }).addTo(layer);
+      // Drawn twice: a dark casing under a bright line, so the route stays
+      // legible over both pale streets and dark parkland.
+      L.polyline(state.route, { color: '#0b1119', weight: 9, opacity: 0.55 }).addTo(layer);
+      L.polyline(state.route, { color: '#e63946', weight: 5, opacity: 0.95 }).addTo(layer);
       pts = pts.concat(state.route);
     }
 
@@ -171,7 +248,13 @@ function buildHtml(zoom, pickable) {
     else if (pts.length === 1) map.setView(pts[0], Math.max(map.getZoom(), ${zoom}));
   };
 
-  ${pickable ? `map.on('click', function (e) { post({ type: 'pick', lat: e.latlng.lat, lng: e.latlng.lng }); });` : ''}
+  ${pickable ? `
+  map.on('click', function (e) {
+    // Move the pin immediately rather than waiting for the round trip, so the
+    // map answers the tap at once and the state catches up.
+    if (pickMarker) pickMarker.setLatLng(e.latlng);
+    post({ type: 'pick', lat: e.latlng.lat, lng: e.latlng.lng });
+  });` : ''}
 
   post({ type: 'ready' });
 </script>

@@ -93,6 +93,17 @@ export function modeForRoleCode(roleCode) {
  * `urgent` marks it so the screen can set it apart from a considered choice
  * between care levels.
  */
+/**
+ * MapTiler supplies the map tiles. The key belongs in the tile URL - it is a
+ * client-side key by design, and MapTiler restricts it by origin in their
+ * dashboard rather than by keeping it secret.
+ *
+ * Leave it empty and the map falls back to OpenStreetMap's own tiles, which
+ * work, look plainer, and whose usage policy asks applications not to depend
+ * on them.
+ */
+export const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY || '6mLLgOMyLQp0DFy6CtAC';
+
 export const AMBULANCE_TYPES = [
   {
     code: 'EMG',

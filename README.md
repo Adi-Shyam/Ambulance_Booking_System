@@ -397,8 +397,21 @@ Email is worth knowing about because it is the only channel with no conditions
 attached: no 24-hour window, no template approval, and no billing relationship.
 Where a business-initiated WhatsApp message needs all three, an email needs none.
 
-**Maps** — defaults to OpenStreetMap: Nominatim for geocoding, OSRM for routing, no
-API key required. Set `MAPS_PROVIDER=google` with a `GOOGLE_MAPS_API_KEY` to switch to
+**Maps** — three separate things, worth keeping apart:
+
+| | Supplier | Key needed | Runs on |
+|---|---|---|---|
+| Geocoding (address → point) | Nominatim | no | backend |
+| Routing (road line, ETA) | OSRM | no | backend |
+| Tiles (the picture) | MapTiler | yes, client-side | app |
+
+Only the tiles need a key, and it is a *client-side* key: it travels in the
+tile URL by design, and MapTiler restricts it by origin in their dashboard
+rather than by keeping it secret. Set `EXPO_PUBLIC_MAPTILER_KEY` to use it;
+leave it empty and the map falls back to OpenStreetMap's own tiles, which work
+and look plainer.
+
+Nominatim and OSRM need no key. Set `MAPS_PROVIDER=google` with a `GOOGLE_MAPS_API_KEY` to switch to
 the Google Geocoding and Directions APIs. If a provider is unreachable the system
 falls back to straight-line distance and an average-speed ETA rather than failing the
 dispatch (constraint C.2).

@@ -42,6 +42,18 @@ export default function TripScreen({ navigation }) {
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useResync(load, [load]);
 
+  // The driver's own pings come back as this event, so their marker follows
+  // them without the screen being reloaded - the same stream the patient is
+  // watching, read from the other end.
+  useSocketEvent('trip:location', (p) => {
+    setTrip((prev) => (prev ? {
+      ...prev,
+      ambulance_location: { latitude: p.latitude, longitude: p.longitude },
+      eta_minutes: p.eta_minutes ?? prev.eta_minutes,
+      route_points: p.route_points?.length ? p.route_points : prev.route_points,
+    } : prev));
+  }, []);
+
   useSocketEvent('booking:cancelled', ({ reason }) => {
     setError(`This booking was cancelled: ${reason}`);
     load();
@@ -145,9 +157,31 @@ export default function TripScreen({ navigation }) {
       </Card>
 
       <Card>
+        {/*
+          The crew's own view of the same journey the patient is watching:
+          where they are, where they are going, and the road between. A single
+          marker on an empty map told them nothing they did not already know.
+        */}
         <MapPanel
-          markers={[{ latitude: target.latitude, longitude: target.longitude, color: target.color, label: target.label, radius: 11 }]}
-          height={240}
+          markers={[
+            {
+              latitude: target.latitude,
+              longitude: target.longitude,
+              glyph: onboard ? '🏥' : '📍',
+              label: target.label,
+              labelAlways: true,
+            },
+            ...(trip.ambulance_location
+              ? [{
+                  ...trip.ambulance_location,
+                  glyph: '🚑',
+                  label: trip.eta_minutes != null ? `${trip.eta_minutes} min away` : 'You',
+                  labelAlways: true,
+                }]
+              : []),
+          ]}
+          route={trip.route_points || []}
+          height={260}
         />
         <Button
           title={`Navigate to ${target.label.toLowerCase()}`}

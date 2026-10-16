@@ -5,7 +5,7 @@
 const express = require('express');
 const { db, nowIso, audit } = require('../db');
 const { nextId } = require('../utils/ids');
-const { haversineKm } = require('../utils/geo');
+const { haversineKm, decodePolyline } = require('../utils/geo');
 const v = require('../utils/validate');
 const { authenticate, requireRole, requireProvider } = require('../middleware/auth');
 const dispatch = require('../services/dispatch');
@@ -231,9 +231,17 @@ router.post('/location', requireProvider, asyncRoute(async (req, res) => {
       eta_minutes: r.eta_minutes,
       route_distance_km: r.route_distance_km,
       route_polyline: r.route_polyline,
+      // Decoded once here rather than in each client. Both ends draw the same
+      // line, and an encoded polyline is only useful to something that knows
+      // how to unpack it.
+      route_points: r.route_polyline ? decodePolyline(r.route_polyline) : [],
     };
     sockets.toUser(booking.user_id, 'trip:location', payload);
     sockets.toBooking(trip.booking_id, 'trip:location', payload);
+    // Back to the crew that sent it, so their own marker and ETA move on
+    // their map too. They are driving the ambulance the patient is watching;
+    // there is no reason only one of them should see it move.
+    sockets.toProvider(req.provider.provider_id, 'trip:location', payload);
     sockets.toAdmins('admin:trip:location', { ...payload, provider_id: req.provider.provider_id });
   }
 
@@ -290,11 +298,25 @@ router.get('/trips/active', requireProvider, asyncRoute(async (req, res) => {
   if (!trip) return res.json({ trip: null });
 
   const patient = db.prepare('SELECT full_name, phone_no FROM users WHERE user_id = ?').get(trip.user_id);
+
+  // The same picture the patient gets, from the other end. A crew navigating
+  // to a pickup needs to see the road they are being sent down and where they
+  // are on it, not a single marker on an empty map - and the data is already
+  // here, encoded, because the patient's tracking view needed it.
+  const route_points = trip.route_polyline ? decodePolyline(trip.route_polyline) : [];
+  const here = db.prepare(
+    'SELECT latitude, longitude, last_seen_timestamp FROM providers WHERE provider_id = ?'
+  ).get(req.provider.provider_id);
+
   res.json({
     trip: {
       ...trip,
       patient: { full_name: trip.patient_name || patient.full_name, phone_no: trip.contact_phone || patient.phone_no },
       next_milestone: MILESTONE_ORDER[MILESTONE_ORDER.indexOf(trip.trip_milestone) + 1] || null,
+      route_points,
+      ambulance_location: here?.latitude != null
+        ? { latitude: here.latitude, longitude: here.longitude, as_of: here.last_seen_timestamp }
+        : null,
     },
   });
 }));

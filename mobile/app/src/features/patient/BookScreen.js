@@ -148,10 +148,14 @@ export default function BookScreen({ navigation }) {
   }
 
   const markers = [
-    ...(pickup ? [{ ...pickup, color: colors.accent, label: 'Pickup', radius: 11 }] : []),
+    ...(pickup
+      ? [{ ...pickup, kind: 'pickup', glyph: '📍', label: 'Pickup — drag to adjust' }]
+      : []),
     ...nearby.slice(0, 10).map((a) => ({
-      latitude: a.latitude, longitude: a.longitude, color: colors.ok, radius: 7,
-      label: `${a.ambulance_type} · ${a.distance_km} km`,
+      latitude: a.latitude,
+      longitude: a.longitude,
+      glyph: '🚑',
+      label: `${a.ambulance_type} · ${a.distance_km} km away`,
     })),
   ];
 
