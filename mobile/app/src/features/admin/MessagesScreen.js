@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
-import { useResync } from '../../lib/socket';
+import { useResync, useSocketEvent } from '../../lib/socket';
 import { colors, dateTimeOf, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Card, EmptyState, Loading, Pill, Small } from '../../components/ui';
 
@@ -34,6 +34,13 @@ export default function MessagesScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useResync(load, [load]);
+
+  // Every WhatsApp, email and push the system sends lands here the moment it
+  // is logged. This is the evidence for F.6 and F.14, and evidence is more
+  // convincing when it can be watched arriving.
+  useSocketEvent('admin:message', (row) => {
+    setMessages((prev) => [row, ...prev].slice(0, 200));
+  }, []);
 
   if (loading) return <Loading text="Loading the alert log…" />;
 

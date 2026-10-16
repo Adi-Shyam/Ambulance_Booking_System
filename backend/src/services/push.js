@@ -59,6 +59,22 @@ function record({ userId, body, title, bookingId, deliveryState, providerRespons
     deliveryState, nowIso(),
     JSON.stringify({ devices: tokenCount, ...providerResponse }).slice(0, 2000), nowIso()
   );
+
+  // Push belongs in the same log as every other channel, and arrives there
+  // the same way. See messaging.announce for why this is required at call
+  // time rather than at the top of the file.
+  try {
+    require('../realtime/socket').toAdmins('admin:message', {
+      message_id: id, booking_id: bookingId || null, recipient_phone: phone,
+      recipient_email: null, message_channel: 'PUSH', message_template_id: 'expo_push',
+      body: `${title}
+${body || ''}`.trim(), delivery_state: deliveryState,
+      created_at: nowIso(),
+    });
+  } catch {
+    // No socket server yet.
+  }
+
   return id;
 }
 

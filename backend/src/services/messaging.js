@@ -100,7 +100,31 @@ function record({ recipientPhone, recipientEmail, channel, templateId, body, boo
     providerResponse ? JSON.stringify(providerResponse).slice(0, 2000) : null,
     nowIso()
   );
+
+  announce({
+    message_id: id, booking_id: bookingId || null, recipient_phone: recipientPhone,
+    recipient_email: recipientEmail || null, message_channel: channel,
+    message_template_id: templateId || null, body: body || null,
+    delivery_state: deliveryState, created_at: nowIso(),
+  });
+
   return id;
+}
+
+/**
+ * Tells the control room about a message the moment it is logged.
+ *
+ * The alert log is the one place that shows every WhatsApp, email and push the
+ * system sent, which makes it the evidence for F.6 and F.14 - and evidence
+ * nobody can watch arrive is half as convincing. Required at call time because
+ * the socket layer loads this module.
+ */
+function announce(row) {
+  try {
+    require('../realtime/socket').toAdmins('admin:message', row);
+  } catch {
+    // No socket server: a test, or a seed. The row is written regardless.
+  }
 }
 
 /** Meta rejects a template parameter containing a newline or a tab. */

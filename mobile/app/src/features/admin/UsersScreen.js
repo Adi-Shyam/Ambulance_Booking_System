@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
-import { useResync } from '../../lib/socket';
+import { useResync, useSocketEvent } from '../../lib/socket';
 import { confirmAction } from '../../lib/confirm';
 import { ROLE_CODES } from '../../lib/config';
 import { colors, radius, spacing, typo } from '../../lib/theme';
@@ -42,6 +42,15 @@ export default function UsersScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useResync(load, [load]);
+
+  // A registration is one audit row away, and the account list is short
+  // enough that refetching it is cheaper than reconstructing a row from an
+  // event that was never shaped for this screen.
+  useSocketEvent('admin:audit', (row) => {
+    if (row.action === 'USER_REGISTERED') load();
+  }, [load]);
+
+  useSocketEvent('admin:provider:new', load, [load]);
 
   async function setStatus(user, verification_status) {
     setBusyId(user.user_id);

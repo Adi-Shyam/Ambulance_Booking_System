@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../../lib/api';
-import { useResync } from '../../lib/socket';
+import { useResync, useSocketEvent } from '../../lib/socket';
 import { colors, dateTimeOf, radius, relative, spacing, typo } from '../../lib/theme';
 import { Banner, Body, Card, EmptyState, Loading, Small } from '../../components/ui';
 
@@ -46,6 +46,16 @@ export default function AuditScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useResync(load, [load]);
+
+  // The trail tails rather than being refreshed. Prepending the row that
+  // arrived, instead of refetching the page it belongs to, keeps the list
+  // moving without asking the server for everything again each time somebody
+  // does anything - and an audit row is written for nearly every action.
+  useSocketEvent('admin:audit', (row) => {
+    if (filter && row.action !== filter) return;
+    setRows((prev) => [row, ...prev].slice(0, 200));
+    setActions((prev) => (prev.includes(row.action) ? prev : [...prev, row.action]));
+  }, [filter]);
 
   if (loading) return <Loading text="Reading the audit trail…" />;
 
