@@ -7,3 +7,6 @@ backend/data/
 
 # Third-party reference PDFs. See docs/reference/README.md.
 docs/reference/*.pdf
+
+# Submission archives built with git archive.
+*.zip
